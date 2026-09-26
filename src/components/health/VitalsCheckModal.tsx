@@ -146,6 +146,7 @@ export function VitalsCheckModal() {
     systolicBP: null as number | null,
     diastolicBP: null as number | null,
     restingHeartRate: null as number | null,
+    spo2: null as number | null,
     ecgValue: "",
     ppgValue: "",
     bloodPressureCategory: "" as PatientRecord["bloodPressureCategory"],
@@ -177,6 +178,7 @@ export function VitalsCheckModal() {
           systolicBP: null,
           diastolicBP: null,
           restingHeartRate: null,
+          spo2: null,
           ecgValue: "",
           ppgValue: "",
           bloodPressureCategory: "",
@@ -281,6 +283,9 @@ export function VitalsCheckModal() {
 
     setSaved(true);
     sessionStorage.setItem(VITALS_SESSION_KEY, "1");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("beatahead-patient-record-updated"));
+    }
     setTimeout(() => dismiss(), 1200);
   }
 

@@ -60,6 +60,7 @@ export interface PatientRecord {
   systolicBP: number | null;
   diastolicBP: number | null;
   restingHeartRate: number | null;
+  spo2: number | null;
   ecgValue: string;
   ppgValue: string;
   bloodPressureCategory: BloodPressureCategory;
@@ -111,6 +112,7 @@ export function createEmptyPatientRecord(userId: string, timestamp = new Date().
     systolicBP: null,
     diastolicBP: null,
     restingHeartRate: null,
+    spo2: null,
     ecgValue: "",
     ppgValue: "",
     bloodPressureCategory: "",
@@ -239,6 +241,7 @@ export function validatePatientRecordUpdate(value: unknown): PatientRecordUpdate
     systolicBP: optionalMeasurement(input.systolicBP, "Systolic BP", 1, 300),
     diastolicBP: optionalMeasurement(input.diastolicBP, "Diastolic BP", 1, 200),
     restingHeartRate: optionalMeasurement(input.restingHeartRate, "Resting heart rate", 1, 300),
+    spo2: optionalMeasurement(input.spo2, "SpO2", 50, 100),
     ecgValue: optionalText(input.ecgValue, "ECG value", 120),
     ppgValue: optionalText(input.ppgValue, "PPG value", 120),
     bloodPressureCategory: optionalEnum(input.bloodPressureCategory, "Blood pressure", BLOOD_PRESSURE_OPTIONS),

@@ -456,6 +456,7 @@ function HealthRecordPageContent() {
     systolicBP: record.systolicBP,
     diastolicBP: record.diastolicBP,
     restingHeartRate: record.restingHeartRate,
+    spo2: record.spo2 ?? null,
     ecgValue: record.ecgValue ?? "",
     ppgValue: record.ppgValue ?? "",
     bloodPressureCategory: record.bloodPressureCategory,
@@ -918,21 +919,31 @@ function HealthRecordPageContent() {
                     />
                   </div>
 
-                  <div className="grid gap-5 sm:grid-cols-2 mt-5">
+                  <div className="grid gap-5 sm:grid-cols-3 mt-5">
+                    <NumberField
+                      label="Blood Oxygen (SpO₂)"
+                      value={record.spo2}
+                      onChange={(v) => field("spo2", v)}
+                      disabled={isLoading}
+                      placeholder="e.g. 98"
+                      min={60} max={100}
+                      unit="%"
+                      icon={<Heart className="w-4 h-4" />}
+                    />
                     <label className="block">
-                      <FieldLabel>ECG Value</FieldLabel>
+                      <FieldLabel>ECG Value (mV or status)</FieldLabel>
                       <input
                         className={inputCls}
                         type="text"
-                        maxLength={120}
                         value={dailyVitals.ecgValue}
                         onChange={(e) => setDailyVitals((c) => ({ ...c, ecgValue: e.target.value }))}
                         disabled={isLoading || isSavingVitals}
-                        placeholder="e.g. 0.8 mV"
+                        placeholder="e.g. 0.8 mV, ST elevation"
                       />
+                      <span className="text-[10px] text-white/40 block mt-1">Directly calibrates baseline ISI</span>
                     </label>
                     <label className="block">
-                      <FieldLabel>PPG Value</FieldLabel>
+                      <FieldLabel>PPG Value (amplitude)</FieldLabel>
                       <input
                         className={inputCls}
                         type="text"
@@ -940,8 +951,9 @@ function HealthRecordPageContent() {
                         value={dailyVitals.ppgValue}
                         onChange={(e) => setDailyVitals((c) => ({ ...c, ppgValue: e.target.value }))}
                         disabled={isLoading || isSavingVitals}
-                        placeholder="e.g. 0.6 (amplitude)"
+                        placeholder="e.g. 0.85, normal pulse"
                       />
+                      <span className="text-[10px] text-white/40 block mt-1">Directly calibrates perfusion index</span>
                     </label>
                   </div>
                   <button type="button" onClick={saveDailyVitals} disabled={isLoading || isSavingVitals}

@@ -105,6 +105,8 @@ export interface PersonalBaseline {
   spo2: number;
   pulseMorphology: number;
   isi: number;
+  ecgAmplitude?: number;
+  ppgAmplitude?: number;
 }
 
 export interface TimelineEvent {
@@ -115,6 +117,8 @@ export interface TimelineEvent {
 
 export interface PatientRecord {
   id: string;
+  name?: string;
+  isCurrentUser?: boolean;
   currentISI: number;
   trend: TrendDirection;
   signalQuality: number;
