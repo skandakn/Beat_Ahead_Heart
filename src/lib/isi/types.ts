@@ -143,7 +143,7 @@ export interface SimulationState {
 }
 
 export interface SystemStatus {
-  aiEngine: "online" | "offline";
+  aiEngine: "online" | "offline" | "active";
   sensorStream: "simulated" | "connected";
   signalProcessing: "active" | "inactive";
   isiEngine: "active" | "inactive";

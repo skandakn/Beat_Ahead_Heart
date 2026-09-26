@@ -21,7 +21,7 @@ export interface GoogleFitVitalsInput {
   spo2?: {
     current?: number;
     average?: number;
-  };
+  } | number;
   heartPoints?: number;
 }
 
@@ -46,10 +46,10 @@ export function deriveBaselineFromHealthRecord(
 ): PersonalBaseline {
   let isiBase = 32;
 
-  // ── 1. Blood Pressure (Manual entry or Google Fit) ──────────────────────
-  const systolic = record.systolicBP ?? googleFitVitals?.bloodPressure?.systolic ?? null;
-  const diastolic = record.diastolicBP ?? googleFitVitals?.bloodPressure?.diastolic ?? null;
-  const bpCategory = record.bloodPressureCategory || googleFitVitals?.bloodPressure?.category || "";
+  // ── 1. Blood Pressure (Google Fit active sync takes precedence if provided, else manual entry) ──
+  const systolic = googleFitVitals?.bloodPressure?.systolic ?? record.systolicBP ?? null;
+  const diastolic = googleFitVitals?.bloodPressure?.diastolic ?? record.diastolicBP ?? null;
+  const bpCategory = googleFitVitals?.bloodPressure?.category || record.bloodPressureCategory || "";
 
   if (systolic !== null && diastolic !== null) {
     if (systolic >= 180 || diastolic >= 120) {
@@ -74,8 +74,8 @@ export function deriveBaselineFromHealthRecord(
     }
   }
 
-  // ── 2. Resting Heart Rate (Manual entry or Google Fit) ───────────────────
-  const rawRestingHR = record.restingHeartRate ?? googleFitVitals?.restingHeartRate ?? googleFitVitals?.currentHeartRate ?? null;
+  // ── 2. Resting Heart Rate (Google Fit active sync takes precedence if provided, else manual entry) ──
+  const rawRestingHR = googleFitVitals?.restingHeartRate ?? googleFitVitals?.currentHeartRate ?? record.restingHeartRate ?? null;
   const restingHR = rawRestingHR !== null
     ? Math.max(38, Math.min(180, rawRestingHR))
     : DEFAULT_BASELINE.restingHR;
@@ -94,8 +94,11 @@ export function deriveBaselineFromHealthRecord(
     }
   }
 
-  // ── 3. SpO2 Blood Oxygen (Manual entry or Google Fit) ───────────────────
-  const rawSpo2 = record.spo2 ?? googleFitVitals?.spo2?.current ?? null;
+  // ── 3. SpO2 Blood Oxygen (Google Fit active sync takes precedence if provided, else manual entry) ──
+  const gfitSpo2 = typeof googleFitVitals?.spo2 === "object"
+    ? (googleFitVitals.spo2?.current ?? null)
+    : (typeof googleFitVitals?.spo2 === "number" ? googleFitVitals.spo2 : null);
+  const rawSpo2 = gfitSpo2 ?? record.spo2 ?? null;
   const spo2 = rawSpo2 !== null
     ? Math.max(70, Math.min(100, Math.round(rawSpo2)))
     : DEFAULT_BASELINE.spo2;

@@ -50,7 +50,6 @@ function getNavItems(t: (key: TranslationKey) => string) {
   return [
     { href: "/dashboard", label: t("nav.overview"), icon: LayoutDashboard },
     { href: "/health-record", label: t("nav.healthRecord"), icon: HeartPulse },
-    { href: "/signals", label: t("nav.signals"), icon: Activity },
     { href: "/trends", label: t("nav.trends"), icon: BarChart3 },
     { href: "/insights", label: t("nav.aiInsights"), icon: Brain },
     { href: "/nutri-agent", label: t("nav.nutriAgent"), icon: Salad },
@@ -91,7 +90,7 @@ export function Sidebar() {
           // Add tour IDs for specific nav items
           let tourId: string | undefined;
           if (item.href === "/health-record") tourId = "nav-health-record";
-          if (item.href === "/signals") tourId = "nav-signals";
+          if (item.href === "/trends") tourId = "nav-trends";
           
           // Check if we need to start wellness agents wrapper
           const isFirstWellnessAgent = item.href === "/nutri-agent";

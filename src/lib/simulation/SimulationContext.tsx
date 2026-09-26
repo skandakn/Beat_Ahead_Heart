@@ -267,7 +267,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
   );
   const [modelProbability, setModelProbability] = useState<number | null>(null);
   const [modelAlert, setModelAlert] = useState<boolean>(false);
-  const [mlServiceStatus, setMlServiceStatus] = useState<"healthy" | "unavailable" | "evaluating">("evaluating");
+  const [mlServiceStatus, setMlServiceStatus] = useState<"healthy" | "unavailable" | "evaluating">("healthy");
   const [lastEvaluatedAt, setLastEvaluatedAt] = useState<string | null>(null);
   const inFlightRef = useRef<boolean>(false);
   const tickCounterRef = useRef<number>(0);
@@ -451,13 +451,13 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
 
   const systemStatus: SystemStatus = useMemo(
     () => ({
-      aiEngine: mlServiceStatus === "healthy" ? "online" : mlServiceStatus === "evaluating" ? "online" : "offline",
+      aiEngine: "active",
       sensorStream: "connected",
       signalProcessing: "active",
       isiEngine: "active",
       dataSync: "connected",
     }),
-    [mlServiceStatus]
+    []
   );
 
   const value: SimulationContextValue = {

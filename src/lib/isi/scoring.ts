@@ -78,17 +78,18 @@ export function calculateISI(input: ScoringInput): ISIScore {
   const modelProb = (input.modelProbability !== undefined && input.modelProbability !== null)
     ? input.modelProbability
     : getSimulatedModelProbability(scenario, historicalScores.length);
-  const isPatValid = scenario !== "motion_artifact" && signalQuality >= 60;
+  const sqNormalized = signalQuality > 1.0 ? signalQuality / 100.0 : signalQuality;
+  const isPatValid = scenario !== "motion_artifact" && (signalQuality >= 60 || (signalQuality <= 1.0 && signalQuality >= 0.60));
 
   const engineInput: EngineInput = {
     modelProbability: modelProb,
     ecg: {
       heartRate: hr,
       sdnn: sdnn,
-      sqi: signalQuality / 100.0,
+      sqi: sqNormalized,
     },
     ppg: {
-      sqi: signalQuality / 100.0,
+      sqi: sqNormalized,
       pulseAmp: ppgVal * 2000.0,
     },
     pat: {

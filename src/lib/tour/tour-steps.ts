@@ -23,9 +23,9 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 3,
-    target: "[data-tour-id='nav-signals']",
-    title: "Signal Analysis",
-    description: "Explore individual physiological signals and their quality metrics.",
+    target: "[data-tour-id='nav-trends']",
+    title: "Long-Term Trends",
+    description: "Explore physiological trends and historical cardiovascular progression.",
     position: "right",
   },
   {
