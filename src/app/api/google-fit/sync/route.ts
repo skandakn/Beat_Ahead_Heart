@@ -4,6 +4,7 @@ import {
   fetchAndMapSteps,
   fetchAndMapSleep,
   fetchAndMapNutrition,
+  fetchAndMapVitals,
 } from "@/lib/google-fit/mappers";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
   const sessionsStart = new Date(now - SIXTY_DAYS).toISOString();
 
   // Execute all 4 queries concurrently with independent 4s timeouts
-  const [sessionsRes, stepsRes, sleepRes, nutritionRes] = await Promise.allSettled([
+  const [sessionsRes, stepsRes, sleepRes, nutritionRes, vitalsRes] = await Promise.allSettled([
     // 1. Tracked workout sessions (60 days, 4s timeout)
     fetch(
       `${SESSIONS_URL}?startTime=${sessionsStart}&endTime=${new Date(now).toISOString()}`,
@@ -129,6 +130,9 @@ export async function POST(request: Request) {
 
     // 4. Nutrition values (com.google.nutrition, 30 days)
     fetchAndMapNutrition(access_token, now - 30 * 86400000, now),
+
+    // 5. Cardiovascular vitals (heart rate, blood pressure, SpO2, heart points, 14 days)
+    fetchAndMapVitals(access_token, now - 14 * 86400000, now),
   ]);
 
   // Handle 401 token invalidation if session fetch returned 401
@@ -146,12 +150,14 @@ export async function POST(request: Request) {
   const stepWorkouts = stepsRes.status === "fulfilled" ? stepsRes.value : [];
   const sleepSessions = sleepRes.status === "fulfilled" ? sleepRes.value : [];
   let nutrition = nutritionRes.status === "fulfilled" ? nutritionRes.value : null;
+  const vitals = vitalsRes.status === "fulfilled" ? vitalsRes.value : null;
 
   const syncErrors: string[] = [];
   if (sessionsRes.status === "rejected") syncErrors.push("sessions");
   if (stepsRes.status === "rejected") syncErrors.push("steps");
   if (sleepRes.status === "rejected") syncErrors.push("sleep");
   if (nutritionRes.status === "rejected") syncErrors.push("nutrition");
+  if (vitalsRes.status === "rejected") syncErrors.push("vitals");
 
   // Calibrated Nutrition Fallback:
   // If the user's Google Cloud returns 0 logged meals (common when 3rd-party food trackers
@@ -240,6 +246,7 @@ export async function POST(request: Request) {
     sleepSessions,
     sleepCount: sleepSessions.length,
     nutrition,
+    vitals,
     token: {
       access_token,
       refresh_token: refresh_token ?? null,

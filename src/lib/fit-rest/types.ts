@@ -308,6 +308,50 @@ export interface GoogleFitNutritionData {
   lastSynced: number;
 }
 
+// ─── Google Fit Vitals Types ────────────────────────────────────────────────
+
+export interface GoogleFitHeartRateSample {
+  timestamp: number;
+  bpm: number;
+  resting?: boolean;
+}
+
+export interface GoogleFitBloodPressureReading {
+  timestamp: number;
+  systolic: number;
+  diastolic: number;
+  category: "normal" | "elevated" | "high_stage_1" | "high_stage_2";
+}
+
+export interface GoogleFitOxygenSaturationReading {
+  timestamp: number;
+  percentage: number;
+}
+
+export interface GoogleFitVitalsData {
+  currentHeartRate: number;
+  restingHeartRate: number;
+  minHeartRate: number;
+  maxHeartRate: number;
+  heartPoints: number; // Google Fit cardio points
+  bloodPressure: {
+    systolic: number;
+    diastolic: number;
+    category: "normal" | "elevated" | "high_stage_1" | "high_stage_2";
+    lastRecorded: number;
+  };
+  spo2: {
+    current: number;
+    average: number;
+    lastRecorded: number;
+  };
+  recentHeartRate: GoogleFitHeartRateSample[];
+  recentBloodPressure: GoogleFitBloodPressureReading[];
+  recentSpO2: GoogleFitOxygenSaturationReading[];
+  source: "google_fit" | "calibrated_baseline";
+  lastSynced: number;
+}
+
 // ─── Storage Keys ─────────────────────────────────────────────────────────────
 
 export const STORAGE_KEYS = {
@@ -316,6 +360,7 @@ export const STORAGE_KEYS = {
   WORKOUT_HISTORY: "beatahead-workout-history",
   SLEEP_HISTORY: "beatahead-sleep-history",
   NUTRITION_HISTORY: "beatahead-gfit-nutrition",
+  VITALS_HISTORY: "beatahead-gfit-vitals",
 } as const;
 
 // ─── Label Maps ───────────────────────────────────────────────────────────────
