@@ -3,13 +3,12 @@
 import { ContributionBars } from "@/components/isi/ContributionBars";
 import { ISIGauge } from "@/components/isi/ISIGauge";
 import { RiskTrendBanner } from "@/components/isi/RiskTrendBanner";
-import { VerifiedModelInferencePanel } from "@/components/ml/VerifiedModelInferencePanel";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useSubscription } from "@/lib/subscription/SubscriptionContext";
 import { Paywall } from "@/components/ui/Paywall";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getContributionInfluence, getConfidenceImpact } from "@/lib/isi/features";
-import { Cpu, ShieldAlert, CheckCircle2, Activity, Info } from "lucide-react";
+import { Activity, Info } from "lucide-react";
 
 export default function InsightsPage() {
   const { currentScore } = useSimulation();
@@ -53,11 +52,9 @@ export default function InsightsPage() {
     <div className="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-navy-900">AI Insights</h1>
-        <p className="text-sm text-navy-500">Explainable multi-source physiological analysis & research model signal</p>
+        <p className="text-sm text-navy-500">Explainable trends from your health and activity data</p>
       </div>
 
-      {/* Phase 7 Staging ML Integration: Research Model Signal */}
-      <VerifiedModelInferencePanel />
       <RiskTrendBanner />
 
       <div className="grid lg:grid-cols-3 gap-6">

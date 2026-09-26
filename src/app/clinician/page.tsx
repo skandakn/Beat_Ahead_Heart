@@ -14,7 +14,6 @@ import { ISIGauge } from "@/components/isi/ISIGauge";
 import { ContributionBars } from "@/components/isi/ContributionBars";
 import { ISITrendChart } from "@/components/charts/ISITrendChart";
 import { BaselineCard } from "@/components/isi/BaselineCard";
-import { VerifiedModelInferencePanel } from "@/components/ml/VerifiedModelInferencePanel";
 import {
   Download,
   ChevronRight,
@@ -31,7 +30,6 @@ import {
 import type { PatientRecord } from "@/lib/isi/types";
 import { MEDICAL_DISCLAIMER } from "@/lib/isi/types";
 import { generateClinicalPDF, generateCohortPDF } from "@/lib/pdf/generateClinicalReport";
-import { extractMatrixAFeatures } from "@/lib/isi/matrix_a";
 import Link from "next/link";
 
 export default function ClinicianPage() {
@@ -43,9 +41,7 @@ export default function ClinicianPage() {
     history,
     baseline,
     features,
-    matrixAFeatures,
     healthRecord,
-    scenario,
   } = useSimulation();
 
   const [cohortPatients] = useState<PatientRecord[]>(() => generatePatients());
@@ -85,19 +81,6 @@ export default function ClinicianPage() {
     }
     return cohortPatients.find((p) => p.id === selectedId) ?? userPatient;
   }, [selectedId, userPatient, cohortPatients]);
-
-  // Derive Matrix A feature vector for inference
-  const selectedFeatures = useMemo(() => {
-    if (selected.isCurrentUser) {
-      return matrixAFeatures;
-    }
-    return extractMatrixAFeatures(
-      selected.lastSample,
-      selected.lastSample,
-      "normal",
-      30
-    );
-  }, [selected, matrixAFeatures]);
 
   const exportPDF = async () => {
     setIsExportingPdf(true);
@@ -361,13 +344,6 @@ export default function ClinicianPage() {
           {/* Feature Contributions */}
           <ContributionBars contributions={selected.scores.at(-1)?.contributions} />
 
-          {/* Model Inference Runner */}
-          <VerifiedModelInferencePanel
-            title={selected.isCurrentUser ? `Verified inference for ${userName}` : `Verified inference for ${selected.id}`}
-            selectedPatientFeatures={selectedFeatures}
-            patientName={selected.name || selected.id}
-            patientId={selected.id}
-          />
         </div>
       </div>
     </div>
