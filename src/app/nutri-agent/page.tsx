@@ -9,7 +9,6 @@ import { Paywall } from "@/components/ui/Paywall";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { WellnessSnapshot } from "@/components/nutri/WellnessSnapshot";
 import { NutriChat } from "@/components/nutri/NutriChat";
-import { NutriProfileForm } from "@/components/nutri/NutriProfileForm";
 import { DailyPlan } from "@/components/nutri/DailyPlan";
 import { SmartRecommendations } from "@/components/nutri/SmartRecommendations";
 import { NutriReport } from "@/components/nutri/NutriReport";
@@ -60,7 +59,6 @@ function NutriAgentInner() {
           <TabsTrigger value="chat">Chat &amp; Snapshot</TabsTrigger>
           <TabsTrigger value="plan">Daily Plan</TabsTrigger>
           <TabsTrigger value="recs">Recommendations</TabsTrigger>
-          <TabsTrigger value="profile">My Profile</TabsTrigger>
           <TabsTrigger value="report">Print Report</TabsTrigger>
         </TabsList>
 
@@ -85,12 +83,6 @@ function NutriAgentInner() {
           <SmartRecommendations isiContext={isiContext} />
         </TabsContent>
 
-        {/* ── Tab 4: Profile form ───────────────────────────────────── */}
-        <TabsContent value="profile">
-          <div className="max-w-xl">
-            <NutriProfileForm />
-          </div>
-        </TabsContent>
 
         {/* ── Tab 5: Print report ───────────────────────────────────── */}
         <TabsContent value="report">
