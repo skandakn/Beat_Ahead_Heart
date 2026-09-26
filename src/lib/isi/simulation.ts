@@ -1,6 +1,7 @@
 import type {
   DemoScenario,
   PatientRecord,
+  PersonalBaseline,
   PhysiologicalSample,
   TimelineEvent,
   TrendDirection,
@@ -30,14 +31,15 @@ export function resetSimulation(): void {
 
 export function generateHistoricalData(
   scenario: DemoScenario,
-  count: number = 60
+  count: number = 60,
+  customBaseline?: PersonalBaseline
 ): { samples: PhysiologicalSample[]; baseTime: number } {
   const baseTime = Date.now() - count * 60000;
   const samples: PhysiologicalSample[] = [];
 
   for (let i = 0; i < count; i++) {
     tickCounter = i;
-    samples.push(generateSample(scenario, baseTime + i * 60000));
+    samples.push(generateSample(scenario, baseTime + i * 60000, customBaseline));
   }
 
   return { samples, baseTime };
@@ -45,13 +47,14 @@ export function generateHistoricalData(
 
 export function generateSample(
   scenario: DemoScenario,
-  timestamp?: number
+  timestamp?: number,
+  customBaseline?: PersonalBaseline
 ): PhysiologicalSample {
   tickCounter++;
   const t = tickCounter / 100;
   const ts = timestamp ?? Date.now();
 
-  const params = getScenarioParams(scenario, t);
+  const params = getScenarioParams(scenario, t, customBaseline);
 
   return {
     timestamp: ts,
@@ -65,22 +68,26 @@ export function generateSample(
   };
 }
 
-function getScenarioParams(scenario: DemoScenario, t: number) {
+function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: PersonalBaseline) {
   const progress = Math.min(t, 1);
   const seed = SCENARIO_SEEDS[scenario];
   const noise = (channel: number, range: number = 0.08) =>
     seededNoise(tickCounter + seed, channel, range);
+
+  const baseHR = customBaseline?.restingHR ?? 68;
+  const baseHrv = customBaseline?.hrv ?? 50;
+  const baseSpo2 = customBaseline?.spo2 ?? 97;
 
   switch (scenario) {
     case "normal":
       return {
         ppg: 0.5 + Math.sin(t * 8) * 0.15 + noise(1),
         ecg: 0.5 + Math.sin(t * 6) * 0.2 + noise(2),
-        spo2: 96.5 + Math.sin(t * 2) * 0.5 + noise(3, 0.16),
+        spo2: baseSpo2 + Math.sin(t * 2) * 0.4 + noise(3, 0.1),
         imu: 0.1 + Math.abs(Math.sin(t * 3)) * 0.15 + noise(4, 0.008),
-        heartRate: 68 + Math.sin(t * 4) * 4 + noise(5, 0.24),
-        hrv: 48 + Math.sin(t * 3) * 5 + noise(6, 0.32),
-        signalQuality: { ppg: 94, ecg: 88, spo2: 96, imu: 92, overall: 94 },
+        heartRate: baseHR + Math.sin(t * 4) * 3 + noise(5, 0.2),
+        hrv: baseHrv + Math.sin(t * 3) * 4 + noise(6, 0.25),
+        signalQuality: { ppg: 95, ecg: 90, spo2: 97, imu: 94, overall: 95 },
       };
 
     case "stress_event": {

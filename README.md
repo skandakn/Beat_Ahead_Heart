@@ -21,9 +21,7 @@
 
 ---
 
-> [!CAUTION]
-> **RESEARCH & INVESTIGATIONAL CLINICAL PROTOTYPE ONLY**:  
-> BeatAhead is an experimental research system designed for retrospective benchmarking and non-diagnostic risk screening. It is **NOT** an FDA-cleared or CE-marked medical device and must **NEVER** replace formal 12-lead electrocardiography, clinical stress testing, emergency medical dispatch, or physician judgment.
+
 
 ---
 
@@ -244,12 +242,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🏆 Hackathon Defense & Documentation Resources
 
-The project includes complete, pre-compiled PDF documentation for judging panels:
-
-- **[Technical Model & Architecture Whitepaper](BeatAhead_ML_Model_and_System_Hackathon_Guide.pdf)**: 14-page clinical engineering manual covering data extraction, SQI filters, temporal tri-window formulation, XGBoost cross-validation, and 17 judge Q&As.
-- **[Presenter Speech & Judge Defense Manual](BeatAhead_Judge_Presentation_Speech_and_Defense.pdf)**: 5-page presenter guide containing word-for-word spoken pitch scripts for Overview, Trends, and AI Insights, plus numbers to memorize.
 
 ---
 

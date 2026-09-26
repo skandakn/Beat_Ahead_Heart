@@ -5,10 +5,11 @@ import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useSubscription, isPremiumAccount } from "@/lib/subscription/SubscriptionContext";
 import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
 import { cn } from "@/lib/utils";
-import { X, Settings, ShieldCheck, CreditCard, Sparkles } from "lucide-react";
+import { X, Settings, ShieldCheck, CreditCard, Sparkles, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSelector } from "./LanguageSelector";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { DEMO_SCENARIOS, DemoScenario } from "@/lib/isi/types";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -17,7 +18,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { t } = useI18n();
-  const { settings, updateSettings } = useSimulation();
+  const { settings, updateSettings, scenario, setScenario } = useSimulation();
   const { user } = useBeatAheadAuth();
   const isWhitelisted = isPremiumAccount(user?.email);
   const {
@@ -138,6 +139,28 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 )}
               </div>
             )}
+          </section>
+
+          {/* Section: Physiological Simulation Scenario */}
+          <section className="rounded-xl border border-navy-200 bg-white p-4 space-y-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-navy-700" />
+              <h3 className="text-sm font-bold text-navy-900">Physiological Scenario</h3>
+            </div>
+            <p className="text-xs text-navy-500">
+              Select the active screening simulation. Default is Normal / Healthy Baseline (ISI &lt; 45).
+            </p>
+            <select
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value as DemoScenario)}
+              className="w-full rounded-lg border border-navy-200 bg-navy-50/50 px-3 py-2 text-xs font-semibold text-navy-900 focus:outline-none focus:border-navy-400"
+            >
+              {DEMO_SCENARIOS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label} ({s.id === "normal" ? "Healthy, ISI < 45" : s.description})
+                </option>
+              ))}
+            </select>
           </section>
 
           {/* Section: Display Settings */}

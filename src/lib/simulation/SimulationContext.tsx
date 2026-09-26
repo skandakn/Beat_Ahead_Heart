@@ -51,7 +51,7 @@ function buildSimulationData(
   activeBaseline: PersonalBaseline = DEFAULT_BASELINE
 ): SimulationData {
   resetSimulation();
-  const { samples: historicalSamples } = generateHistoricalData(newScenario, 60);
+  const { samples: historicalSamples } = generateHistoricalData(newScenario, 60, activeBaseline);
   const historicalScores: ISIScore[] = [];
 
   historicalSamples.forEach((sample, i) => {
@@ -148,11 +148,26 @@ const DEFAULT_SETTINGS: SimulationSettings = {
 const SimulationContext = createContext<SimulationContextValue | null>(null);
 
 export function SimulationProvider({ children }: { children: React.ReactNode }) {
-  const [scenario, setScenarioState] = useState<DemoScenario>("stress_event");
+  const [scenario, setScenarioState] = useState<DemoScenario>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("beatahead-scenario");
+      if (saved && ["normal", "stress_event", "recovering", "persistent_rising", "motion_artifact"].includes(saved)) {
+        return saved as DemoScenario;
+      }
+    }
+    return "normal";
+  });
   const [isRunning, setIsRunning] = useState(false);
-  const [simulationData, setSimulationData] = useState<SimulationData>(() =>
-    buildSimulationData("stress_event")
-  );
+  const [simulationData, setSimulationData] = useState<SimulationData>(() => {
+    let initialScenario: DemoScenario = "normal";
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("beatahead-scenario");
+      if (saved && ["normal", "stress_event", "recovering", "persistent_rising", "motion_artifact"].includes(saved)) {
+        initialScenario = saved as DemoScenario;
+      }
+    }
+    return buildSimulationData(initialScenario, null, DEFAULT_BASELINE);
+  });
 
   // ── Health-record-derived baseline ─────────────────────────────────────
   const [baseline, setBaseline] = useState<PersonalBaseline>(DEFAULT_BASELINE);
@@ -203,8 +218,20 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
         setHealthRecord(record);
         const derived = deriveBaselineFromHealthRecord(record);
         setBaseline(derived);
+
+        // If the user has a healthy baseline (derived.isi <= 45) and has not explicitly chosen a stress simulation,
+        // keep the scenario as "normal" so the displayed ISI stays healthy (< 45).
+        let activeScenario = scenario;
+        if (typeof window !== "undefined") {
+          const userChosenScenario = localStorage.getItem("beatahead-scenario");
+          if (!userChosenScenario && derived.isi <= 45) {
+            activeScenario = "normal";
+            setScenarioState("normal");
+          }
+        }
+
         // Directly recalculate the simulation scores with the user's vitals baseline
-        setSimulationData(buildSimulationData(scenario, modelProbabilityRef.current, derived));
+        setSimulationData(buildSimulationData(activeScenario, modelProbabilityRef.current, derived));
       }
     } catch {
       // silently fall back to DEFAULT_BASELINE
@@ -398,9 +425,15 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     (newScenario: DemoScenario) => {
       setIsRunning(false);
       setScenarioState(newScenario);
-      showToast(`Demo scenario: ${newScenario.replace(/_/g, " ")}`);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("beatahead-scenario", newScenario);
+        } catch {}
+      }
+      initializeData(newScenario);
+      showToast(`Scenario: ${newScenario.replace(/_/g, " ")}`);
     },
-    [showToast]
+    [showToast, initializeData]
   );
 
   const startMonitoring = useCallback(() => setIsRunning(true), []);

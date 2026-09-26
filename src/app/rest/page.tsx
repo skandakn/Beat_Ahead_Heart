@@ -1,7 +1,6 @@
 "use client";
 
 import { FitRestProvider } from "@/lib/fit-rest/FitRestContext";
-import { RestProfileForm } from "@/components/fit-rest/RestProfileForm";
 import { SleepOverview } from "@/components/fit-rest/SleepOverview";
 import { RecoveryStatus } from "@/components/fit-rest/RecoveryStatus";
 import { WindDownRoutine } from "@/components/fit-rest/WindDownRoutine";
@@ -46,7 +45,6 @@ function RestPageInner() {
           <TabsTrigger value="overview">Sleep Overview</TabsTrigger>
           <TabsTrigger value="routine">Wind-Down Routine</TabsTrigger>
           <TabsTrigger value="history">Sleep History</TabsTrigger>
-          <TabsTrigger value="profile">My Profile</TabsTrigger>
           <TabsTrigger value="report">
             <FileText className="h-3.5 w-3.5 mr-1.5" />
             Print Report
@@ -71,12 +69,6 @@ function RestPageInner() {
           <SleepHistory />
         </TabsContent>
 
-        {/* ── Tab 4: Profile form ───────────────────────────────────── */}
-        <TabsContent value="profile">
-          <div className="max-w-xl">
-            <RestProfileForm />
-          </div>
-        </TabsContent>
 
         {/* ── Tab 5: Print Report ───────────────────────────────────── */}
         <TabsContent value="report">

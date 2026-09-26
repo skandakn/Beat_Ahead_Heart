@@ -3,34 +3,33 @@ import type { PatientRecord } from "@/lib/patient-record";
 
 export const DEFAULT_BASELINE: PersonalBaseline = {
   restingHR: 68,
-  hrv: 51,
+  hrv: 52,
   spo2: 97,
   pulseMorphology: 0.85,
-  isi: 48,
+  isi: 32,
 };
 
 /**
  * Derives a PersonalBaseline from a saved PatientRecord (health-record form data).
  *
- * The ISI baseline starts at 40 (low-normal) and accumulates risk points from
- * clinical factors recorded in the health record:
+ * For a healthy individual with no cardiac disease and normal vitals,
+ * the baseline ISI settles in the healthy range (25-35, strictly < 45).
+ * Risk factors incrementally increase the baseline:
  *
  *   Blood pressure category → +0 to +18 pts
  *   Resting heart rate (if known) → adjusts restingHR baseline
  *   Smoking → +0 to +8 pts
  *   Diabetes status → +0 to +10 pts
  *   Cholesterol status → +0 to +8 pts
- *   Stress level → +0 to +9 pts
- *   Exercise frequency → −8 to 0 pts (protective)
+ *   Stress level → +0 to +8 pts
+ *   Exercise frequency → −6 to 0 pts (protective)
  *   Family history of heart attack → +4 pts
- *   Prior heart attack / angina → +10 pts
+ *   Prior heart attack / angina → +10 to +12 pts
  *   Chest pain history → +5 pts
  *   Shortness of breath → +3 pts
- *
- * Maximum possible ISI baseline ≈ 75 (still within 0-100 engine range).
  */
 export function deriveBaselineFromHealthRecord(record: PatientRecord): PersonalBaseline {
-  let isiBase = 40;
+  let isiBase = 32;
 
   // ── Blood pressure ──────────────────────────────────
   switch (record.bloodPressureCategory) {
@@ -91,7 +90,7 @@ export function deriveBaselineFromHealthRecord(record: PatientRecord): PersonalB
   if (record.familyDiabetes)      isiBase += 2;
 
   // ── Clamp to reasonable range ───────────────────────
-  const clampedIsi = Math.max(28, Math.min(82, Math.round(isiBase)));
+  const clampedIsi = Math.max(22, Math.min(82, Math.round(isiBase)));
 
   // ── Resting heart rate ──────────────────────────────
   const restingHR = record.restingHeartRate !== null

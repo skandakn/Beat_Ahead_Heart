@@ -15,6 +15,7 @@ import type {
   SleepSession,
   RecoveryState,
   GoogleFitNutritionData,
+  GoogleFitVitalsData,
 } from "./types";
 import {
   DEFAULT_FITNESS_PROFILE,
@@ -65,11 +66,13 @@ interface FitRestContextValue {
   googleFitSyncing: boolean;
   googleFitError: string | null;
   googleFitNutrition: GoogleFitNutritionData | null;
+  googleFitVitals: GoogleFitVitalsData | null;
   syncGoogleFit: () => Promise<boolean>;
   disconnectGoogleFit: () => void;
   importPhoneSleepData: () => void;
   importPhoneNutritionData: () => void;
   clearGoogleFitError: () => void;
+  applyVitalsToHealthRecord: () => void;
 }
 
 const FitRestContext = createContext<FitRestContextValue | null>(null);
@@ -92,6 +95,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
   const [googleFitSyncing, setGoogleFitSyncing] = useState(false);
   const [googleFitError, setGoogleFitError] = useState<string | null>(null);
   const [googleFitNutrition, setGoogleFitNutrition] = useState<GoogleFitNutritionData | null>(null);
+  const [googleFitVitals, setGoogleFitVitals] = useState<GoogleFitVitalsData | null>(null);
 
   // ── Load from localStorage on mount ───────────────────────────────────────
 
@@ -153,6 +157,16 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
           setGoogleFitNutrition(JSON.parse(storedNutrition) as GoogleFitNutritionData);
         } catch {
           localStorage.removeItem(STORAGE_KEYS.NUTRITION_HISTORY);
+        }
+      }
+
+      // Load Google Fit vitals (if previously synced)
+      const storedVitals = localStorage.getItem(STORAGE_KEYS.VITALS_HISTORY);
+      if (storedVitals) {
+        try {
+          setGoogleFitVitals(JSON.parse(storedVitals) as GoogleFitVitalsData);
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.VITALS_HISTORY);
         }
       }
 
@@ -388,6 +402,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         workouts?: WorkoutSession[];
         sleepSessions?: SleepSession[];
         nutrition?: GoogleFitNutritionData;
+        vitals?: GoogleFitVitalsData;
         token?: GoogleFitToken;
         error?: string;
       };
@@ -433,6 +448,14 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         } catch {/* ignore */}
       }
 
+      // Persist fresh vitals data
+      if (data.vitals) {
+        setGoogleFitVitals(data.vitals);
+        try {
+          localStorage.setItem(STORAGE_KEYS.VITALS_HISTORY, JSON.stringify(data.vitals));
+        } catch {/* ignore */}
+      }
+
       // Persist refreshed token if it changed
       if (data.token) {
         setGoogleFitToken(data.token);
@@ -447,16 +470,41 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(GFIT_SYNCED_KEY, String(now));
       } catch {/* ignore */}
 
-      // Link Google Fit activity directly to Patient Record vitals & ISI baseline
-      if (typeof window !== "undefined" && freshWorkouts.length > 0) {
-        const derivedExercise = freshWorkouts.length >= 8 ? "active" : freshWorkouts.length >= 3 ? "moderate" : "light";
+      // Link Google Fit activity and vitals directly to Patient Record & ISI baseline
+      if (typeof window !== "undefined") {
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
           if (key && key.startsWith("beatahead-patient-record")) {
             try {
               const currentRec = JSON.parse(localStorage.getItem(key) || "{}");
-              if (currentRec.exerciseFrequency !== derivedExercise) {
-                currentRec.exerciseFrequency = derivedExercise;
+              let changed = false;
+
+              if (freshWorkouts.length > 0) {
+                const derivedExercise = freshWorkouts.length >= 8 ? "active" : freshWorkouts.length >= 3 ? "moderate" : "light";
+                if (currentRec.exerciseFrequency !== derivedExercise) {
+                  currentRec.exerciseFrequency = derivedExercise;
+                  changed = true;
+                }
+              }
+
+              if (data.vitals?.restingHeartRate && currentRec.restingHeartRate !== data.vitals.restingHeartRate) {
+                currentRec.restingHeartRate = data.vitals.restingHeartRate;
+                changed = true;
+              }
+
+              if (data.vitals?.bloodPressure?.systolic && data.vitals?.bloodPressure?.diastolic) {
+                if (
+                  currentRec.systolicBP !== data.vitals.bloodPressure.systolic ||
+                  currentRec.diastolicBP !== data.vitals.bloodPressure.diastolic
+                ) {
+                  currentRec.systolicBP = data.vitals.bloodPressure.systolic;
+                  currentRec.diastolicBP = data.vitals.bloodPressure.diastolic;
+                  currentRec.bloodPressureCategory = data.vitals.bloodPressure.category;
+                  changed = true;
+                }
+              }
+
+              if (changed) {
                 currentRec.updatedAt = new Date().toISOString();
                 localStorage.setItem(key, JSON.stringify(currentRec));
                 window.dispatchEvent(new Event("beatahead-patient-record-updated"));
@@ -681,6 +729,42 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     setGoogleFitError(null);
   }, []);
 
+  const applyVitalsToHealthRecord = useCallback(() => {
+    if (typeof window === "undefined" || !googleFitVitals) return;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("beatahead-patient-record")) {
+        try {
+          const currentRec = JSON.parse(localStorage.getItem(key) || "{}");
+          let changed = false;
+
+          if (googleFitVitals.restingHeartRate && currentRec.restingHeartRate !== googleFitVitals.restingHeartRate) {
+            currentRec.restingHeartRate = googleFitVitals.restingHeartRate;
+            changed = true;
+          }
+
+          if (googleFitVitals.bloodPressure?.systolic && googleFitVitals.bloodPressure?.diastolic) {
+            if (
+              currentRec.systolicBP !== googleFitVitals.bloodPressure.systolic ||
+              currentRec.diastolicBP !== googleFitVitals.bloodPressure.diastolic
+            ) {
+              currentRec.systolicBP = googleFitVitals.bloodPressure.systolic;
+              currentRec.diastolicBP = googleFitVitals.bloodPressure.diastolic;
+              currentRec.bloodPressureCategory = googleFitVitals.bloodPressure.category;
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            currentRec.updatedAt = new Date().toISOString();
+            localStorage.setItem(key, JSON.stringify(currentRec));
+            window.dispatchEvent(new Event("beatahead-patient-record-updated"));
+          }
+        } catch {}
+      }
+    }
+  }, [googleFitVitals]);
+
   const value: FitRestContextValue = {
     fitnessProfile,
     updateFitnessProfile,
@@ -704,11 +788,13 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     googleFitSyncing,
     googleFitError,
     googleFitNutrition,
+    googleFitVitals,
     syncGoogleFit,
     disconnectGoogleFit,
     importPhoneSleepData,
     importPhoneNutritionData,
     clearGoogleFitError,
+    applyVitalsToHealthRecord,
   };
 
   return (

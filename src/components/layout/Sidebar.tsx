@@ -56,6 +56,7 @@ function getNavItems(t: (key: TranslationKey) => string) {
     { href: "/nutri-agent", label: t("nav.nutriAgent"), icon: Salad },
     { href: "/fitness", label: t("nav.fitnessAgent"), icon: Dumbbell },
     { href: "/rest", label: t("nav.restAgent"), icon: Moon },
+    { href: "/vital-agent", label: t("nav.vitalAgent"), icon: HeartPulse },
     { href: "/clinician", label: t("nav.clinicianView"), icon: Stethoscope },
   ];
 }
@@ -94,7 +95,7 @@ export function Sidebar() {
           
           // Check if we need to start wellness agents wrapper
           const isFirstWellnessAgent = item.href === "/nutri-agent";
-          const isLastWellnessAgent = item.href === "/rest";
+          const isLastWellnessAgent = item.href === "/vital-agent";
           
           const linkElement = (
             <Link
@@ -115,7 +116,7 @@ export function Sidebar() {
           
           // Wrap wellness agents
           if (isFirstWellnessAgent) {
-            const wellnessAgents = navItems.slice(index, index + 3);
+            const wellnessAgents = navItems.slice(index, index + 4);
             return (
               <div key="wellness-agents-group" data-tour-id="wellness-agents">
                 {wellnessAgents.map((wellnessItem) => {
@@ -141,8 +142,8 @@ export function Sidebar() {
             );
           }
           
-          // Skip the next two wellness agents since we already rendered them
-          if (item.href === "/fitness" || item.href === "/rest") {
+          // Skip the other wellness agents since we already rendered them in the group
+          if (item.href === "/fitness" || item.href === "/rest" || item.href === "/vital-agent") {
             return null;
           }
           
@@ -292,6 +293,7 @@ export function AppHeader() {
     "/health-record": t("header.myHealthRecord"),
     "/fitness": t("nav.fitnessAgent"),
     "/rest": t("nav.restAgent"),
+    "/vital-agent": t("nav.vitalAgent"),
     "/clinician": t("header.clinicianDashboard"),
     "/pricing": t("header.pricingPlans"),
     "/methodology": t("nav.methodology"),
