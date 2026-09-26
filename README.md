@@ -21,9 +21,7 @@
 
 ---
 
-> [!CAUTION]
-> **RESEARCH & INVESTIGATIONAL CLINICAL PROTOTYPE ONLY**:  
-> BeatAhead is an experimental research system designed for retrospective benchmarking and non-diagnostic risk screening. It is **NOT** an FDA-cleared or CE-marked medical device and must **NEVER** replace formal 12-lead electrocardiography, clinical stress testing, emergency medical dispatch, or physician judgment.
+
 
 ---
 
