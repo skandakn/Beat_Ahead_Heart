@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useBeatAheadAuth, SafeUserButton } from "@/lib/auth/ClerkAuthWrapper";
 
 import {
-  Activity,
   BarChart3,
   Brain,
   Dumbbell,
@@ -13,7 +12,6 @@ import {
   LayoutDashboard,
   Menu,
   Moon,
-  Radio,
   Salad,
   Stethoscope,
   X,
@@ -285,7 +283,6 @@ export function AppHeader() {
 
   const titles: Record<string, string> = {
     "/dashboard": t("header.cardiovascularDashboard"),
-    "/signals": t("header.featureAnalysis"),
     "/trends": t("header.longTermTrends"),
     "/insights": t("nav.aiInsights"),
     "/nutri-agent": t("nav.nutriAgent"),

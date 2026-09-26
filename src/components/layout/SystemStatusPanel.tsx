@@ -12,8 +12,6 @@ export function SystemStatusPanel({ compact }: SystemStatusPanelProps) {
 
   const items = [
     { label: "AI Engine", status: systemStatus.aiEngine },
-    { label: "Sensor Stream", status: systemStatus.sensorStream },
-    { label: "Signal Processing", status: systemStatus.signalProcessing },
     { label: "ISI Engine", status: systemStatus.isiEngine },
     { label: "Data Sync", status: systemStatus.dataSync },
   ];

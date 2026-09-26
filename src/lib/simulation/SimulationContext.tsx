@@ -452,8 +452,6 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
   const systemStatus: SystemStatus = useMemo(
     () => ({
       aiEngine: "active",
-      sensorStream: "connected",
-      signalProcessing: "active",
       isiEngine: "active",
       dataSync: "connected",
     }),
