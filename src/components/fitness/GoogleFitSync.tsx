@@ -739,15 +739,66 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
             )}
 
             {/* Connect button */}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={connectGoogleFit}
-              className="gap-2 border-navy-300 hover:border-navy-500 w-full sm:w-auto"
-            >
-              <GoogleIcon className="h-4 w-4" />
-              Connect Google Fit
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={connectGoogleFit}
+                className="gap-2 border-navy-300 hover:border-navy-500 w-full sm:w-auto"
+              >
+                <GoogleIcon className="h-4 w-4" />
+                Connect Google Fit
+              </Button>
+            </div>
+
+            {/* If vitals variant, let user try presets right away */}
+            {variant === "vitals" && (
+              <div className="rounded-lg border border-sky-100 bg-sky-50/60 p-3 space-y-2 mt-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-navy-900 flex items-center gap-1.5">
+                    <Zap className="h-3.5 w-3.5 text-amber-500" />
+                    Test Live ISI Score Dynamics (Demo Sync Presets)
+                  </p>
+                  {presetFeedback && (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      ✓ Calibrated to {presetFeedback} vitals
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-navy-600 leading-relaxed">
+                  Try applying simulated Google Fit vitals to verify how resting HR, BP, and SpO₂ immediately calibrate your personal baseline ISI score:
+                </p>
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => handlePreset("normal")}
+                    className="text-xs bg-white hover:bg-emerald-50 border-emerald-200 text-emerald-800"
+                  >
+                    Optimal (HR 62, 116/74, 99%)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => handlePreset("elevated")}
+                    className="text-xs bg-white hover:bg-red-50 border-red-200 text-red-800"
+                  >
+                    Elevated (HR 102, 164/102, 91%)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => handlePreset("recovery")}
+                    className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-800"
+                  >
+                    Recovery (HR 72, 124/80, 97%)
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <p className="text-[10px] text-navy-400 leading-relaxed">
               You&apos;ll be redirected to Google to authorise read-only access to your Google Fit
