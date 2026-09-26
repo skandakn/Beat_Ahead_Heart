@@ -56,7 +56,7 @@ function buildSimulationData(
 
   historicalSamples.forEach((sample, i) => {
     const prev = i > 0 ? historicalSamples[i - 1] : null;
-    const feat = extractFeatures(sample, prev, newScenario);
+    const feat = extractFeatures(sample, prev, newScenario, activeBaseline);
     const score = calculateISI({
       features: feat,
       baseline: activeBaseline,
@@ -84,7 +84,8 @@ function buildSimulationData(
   const lastFeatures = extractFeatures(
     lastSample,
     historicalSamples[historicalSamples.length - 2] ?? null,
-    newScenario
+    newScenario,
+    activeBaseline
   );
   const lastMatrixA = extractMatrixAFeatures(
     lastSample,
