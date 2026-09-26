@@ -56,7 +56,7 @@ export function DashboardStats() {
                     {stat.suffix && <span className="text-xs font-normal text-navy-400 ml-1">{stat.suffix}</span>}
                   </p>
                 </div>
-                <div className={cn("p-2 rounded-lg", stat.accent ? "bg-red-50" : stat.isAlert ? "bg-rose-100" : "bg-navy-50")}>
+                <div className={cn("p-2 rounded-lg", stat.accent ? "bg-red-50" : "bg-navy-50")}>
                   <Icon className={cn("w-4 h-4", stat.accent ? "text-cardiac" : "text-navy-600")} />
                 </div>
               </div>
