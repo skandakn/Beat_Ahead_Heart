@@ -9,7 +9,6 @@ import { RiskTrendBanner } from "@/components/isi/RiskTrendBanner";
 import { ContributionBars } from "@/components/isi/ContributionBars";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useTour } from "@/lib/tour/TourContext";
-import { ISI_RANGE_LABELS } from "@/lib/isi/types";
 import Link from "next/link";
 import { Heart, PhoneCall, FileText, CreditCard, BookOpen, Info, Compass } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -47,17 +46,7 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-navy-100 bg-white p-6 shadow-card" data-tour-id="isi-gauge">
             <ISIGauge />
           </div>
-          {settings.showRangeLabels && (
-            <div className="rounded-xl border border-navy-100 bg-white p-4 space-y-2">
-              <p className="text-xs font-semibold text-navy-500 uppercase">ISI Ranges (Illustrative)</p>
-              {Object.values(ISI_RANGE_LABELS).map((r) => (
-                <div key={r.range} className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-navy-700">{r.range}</span>
-                  <span className="text-navy-500">{r.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
+
         </div>
       </div>
 
