@@ -409,6 +409,8 @@ function HealthRecordPageContent() {
     systolicBP: record.systolicBP,
     diastolicBP: record.diastolicBP,
     restingHeartRate: record.restingHeartRate,
+    ecgValue: record.ecgValue ?? "",
+    ppgValue: record.ppgValue ?? "",
     bloodPressureCategory: record.bloodPressureCategory,
     cholesterolStatus: record.cholesterolStatus,
     conditions: fromLines(lists.conditions),
@@ -807,6 +809,33 @@ function HealthRecordPageContent() {
                       onChange={(v) => field("bloodPressureCategory", v as PatientRecord["bloodPressureCategory"])}
                       icon={<Activity className="w-4 h-4" />}
                     />
+                  </div>
+
+                  <div className="grid gap-5 sm:grid-cols-2 mt-5">
+                    <label className="block">
+                      <FieldLabel>ECG Value</FieldLabel>
+                      <input
+                        className={inputCls}
+                        type="text"
+                        maxLength={120}
+                        value={record.ecgValue ?? ""}
+                        onChange={(e) => field("ecgValue", e.target.value)}
+                        disabled={isLoading}
+                        placeholder="e.g. 0.8 mV"
+                      />
+                    </label>
+                    <label className="block">
+                      <FieldLabel>PPG Value</FieldLabel>
+                      <input
+                        className={inputCls}
+                        type="text"
+                        maxLength={120}
+                        value={record.ppgValue ?? ""}
+                        onChange={(e) => field("ppgValue", e.target.value)}
+                        disabled={isLoading}
+                        placeholder="e.g. 0.6 (amplitude)"
+                      />
+                    </label>
                   </div>
                 </div>
 
