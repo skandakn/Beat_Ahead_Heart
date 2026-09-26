@@ -25,6 +25,7 @@ import {
 import {
   computeRecoveryState,
 } from "./demo-data";
+import { localDateKey, upsertDailyVitalsEntry } from "@/lib/patient-record";
 
 // ─── Google Fit token shape (stored in localStorage) ─────────────────────────
 
@@ -504,6 +505,18 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
                 }
               }
 
+              if (changed && (data.vitals?.restingHeartRate || data.vitals?.bloodPressure)) {
+                currentRec.vitalsHistory = upsertDailyVitalsEntry(currentRec.vitalsHistory, {
+                  date: localDateKey(),
+                  systolicBP: currentRec.systolicBP ?? null,
+                  diastolicBP: currentRec.diastolicBP ?? null,
+                  restingHeartRate: currentRec.restingHeartRate ?? null,
+                  ecgValue: currentRec.ecgValue ?? "",
+                  ppgValue: currentRec.ppgValue ?? "",
+                  bloodPressureCategory: currentRec.bloodPressureCategory ?? "",
+                });
+              }
+
               if (changed) {
                 currentRec.updatedAt = new Date().toISOString();
                 localStorage.setItem(key, JSON.stringify(currentRec));
@@ -753,6 +766,18 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
               currentRec.bloodPressureCategory = googleFitVitals.bloodPressure.category;
               changed = true;
             }
+          }
+
+          if (changed) {
+            currentRec.vitalsHistory = upsertDailyVitalsEntry(currentRec.vitalsHistory, {
+              date: localDateKey(),
+              systolicBP: currentRec.systolicBP ?? null,
+              diastolicBP: currentRec.diastolicBP ?? null,
+              restingHeartRate: currentRec.restingHeartRate ?? null,
+              ecgValue: currentRec.ecgValue ?? "",
+              ppgValue: currentRec.ppgValue ?? "",
+              bloodPressureCategory: currentRec.bloodPressureCategory ?? "",
+            });
           }
 
           if (changed) {

@@ -38,7 +38,10 @@ import {
   CHOLESTEROL_STATUS_OPTIONS,
   PatientRecord,
   PatientRecordUpdate,
+  DailyVitalsEntry,
   createEmptyPatientRecord,
+  localDateKey,
+  upsertDailyVitalsEntry,
 } from "@/lib/patient-record";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 
@@ -56,6 +59,42 @@ function toTextLists(r: PatientRecord): Record<keyof TextLists, string> {
 
 function fromLines(v: string) {
   return v.split("\n").map((s) => s.trim()).filter(Boolean);
+}
+
+function emptyDailyVitals(date: string): DailyVitalsEntry {
+  return {
+    date,
+    systolicBP: null,
+    diastolicBP: null,
+    restingHeartRate: null,
+    ecgValue: "",
+    ppgValue: "",
+    bloodPressureCategory: "",
+  };
+}
+
+function normalizePatientRecord(record: PatientRecord, userId: string): PatientRecord {
+  const normalized = {
+    ...createEmptyPatientRecord(userId),
+    ...record,
+    vitalsHistory: Array.isArray(record.vitalsHistory) ? record.vitalsHistory : [],
+  };
+  const hasLegacyVitals =
+    normalized.systolicBP !== null || normalized.diastolicBP !== null ||
+    normalized.restingHeartRate !== null || Boolean(normalized.ecgValue || normalized.ppgValue);
+  if (normalized.vitalsHistory.length === 0 && hasLegacyVitals) {
+    const date = normalized.updatedAt ? localDateKey(new Date(normalized.updatedAt)) : localDateKey();
+    normalized.vitalsHistory = [{
+      ...emptyDailyVitals(date),
+      systolicBP: normalized.systolicBP,
+      diastolicBP: normalized.diastolicBP,
+      restingHeartRate: normalized.restingHeartRate,
+      ecgValue: normalized.ecgValue ?? "",
+      ppgValue: normalized.ppgValue ?? "",
+      bloodPressureCategory: normalized.bloodPressureCategory,
+    }];
+  }
+  return normalized;
 }
 
 function bmi(h: number | null, w: number | null): string {
@@ -311,9 +350,12 @@ function HealthRecordPageContent() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [vitalsDate, setVitalsDate] = useState("");
+  const [dailyVitals, setDailyVitals] = useState<DailyVitalsEntry>(() => emptyDailyVitals(""));
   const [step, setStep] = useState(0);
   const [animDir, setAnimDir] = useState<"forward" | "back">("forward");
   const [animating, setAnimating] = useState(false);
@@ -333,21 +375,25 @@ function HealthRecordPageContent() {
   // ── localStorage key for this user ──────────────────────────────────────────
   const lsKey = `beatahead-patient-record-${effectiveUserId}`;
 
-  // Load existing record — try localStorage first, then API as fallback
+  // Load the persistent profile and its dated local vitals history.
   useEffect(() => {
     if (!isLoaded) return;
     let active = true;
     setIsLoading(true);
     setError(null);
+    const today = localDateKey();
+    setVitalsDate(today);
+    setDailyVitals(emptyDailyVitals(today));
 
     // 1. Try localStorage (instant, works on Vercel)
     try {
       const stored = localStorage.getItem(lsKey);
       if (stored) {
-        const parsed = JSON.parse(stored) as PatientRecord;
+        const parsed = normalizePatientRecord(JSON.parse(stored) as PatientRecord, effectiveUserId);
         if (active) {
           setRecord(parsed);
           setLists(toTextLists(parsed));
+          setDailyVitals(parsed.vitalsHistory.find((entry) => entry.date === today) ?? emptyDailyVitals(today));
           setIsLoading(false);
           return;
         }
@@ -361,12 +407,13 @@ function HealthRecordPageContent() {
       .then(async (res) => {
         const payload = await res.json();
         if (!res.ok) throw new Error(payload.error || "Unable to load your health record.");
-        return payload.record as PatientRecord;
+        return normalizePatientRecord(payload.record as PatientRecord, effectiveUserId);
       })
       .then((next) => {
         if (!active) return;
         setRecord(next);
         setLists(toTextLists(next));
+        setDailyVitals(next.vitalsHistory.find((entry) => entry.date === today) ?? emptyDailyVitals(today));
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : "Unable to load."))
       .finally(() => active && setIsLoading(false));
@@ -412,6 +459,7 @@ function HealthRecordPageContent() {
     ecgValue: record.ecgValue ?? "",
     ppgValue: record.ppgValue ?? "",
     bloodPressureCategory: record.bloodPressureCategory,
+    vitalsHistory: record.vitalsHistory ?? [],
     cholesterolStatus: record.cholesterolStatus,
     conditions: fromLines(lists.conditions),
     medications: fromLines(lists.medications),
@@ -432,6 +480,59 @@ function HealthRecordPageContent() {
     primaryCarePhysician: record.primaryCarePhysician,
     notes: record.notes,
   }), [record, lists]);
+
+  function selectVitalsDate(date: string) {
+    setVitalsDate(date);
+    const savedEntry = record.vitalsHistory.find((entry) => entry.date === date);
+    setDailyVitals(savedEntry ? { ...savedEntry } : emptyDailyVitals(date));
+    setMessage(null);
+  }
+
+  async function saveDailyVitals() {
+    if (!vitalsDate) return;
+    const entry = { ...dailyVitals, date: vitalsDate };
+    const hasAnyValue = entry.systolicBP !== null || entry.diastolicBP !== null ||
+      entry.restingHeartRate !== null || Boolean(entry.ecgValue.trim() || entry.ppgValue.trim());
+    if (!hasAnyValue) {
+      setError("Enter at least one blood pressure, heart rate, ECG, or PPG value before saving.");
+      return;
+    }
+
+    setIsSavingVitals(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const vitalsHistory = upsertDailyVitalsEntry(record.vitalsHistory, entry);
+      const latest = vitalsHistory[vitalsHistory.length - 1];
+      const update: PatientRecordUpdate = {
+        ...buildUpdate(),
+        systolicBP: latest.systolicBP,
+        diastolicBP: latest.diastolicBP,
+        restingHeartRate: latest.restingHeartRate,
+        ecgValue: latest.ecgValue,
+        ppgValue: latest.ppgValue,
+        bloodPressureCategory: latest.bloodPressureCategory,
+        vitalsHistory,
+      };
+      const res = await fetch("/api/patient-record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: effectiveUserId, ...update }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Unable to save daily vitals.");
+      const saved = normalizePatientRecord(payload.record as PatientRecord, effectiveUserId);
+      localStorage.setItem(lsKey, JSON.stringify(saved));
+      setRecord(saved);
+      await refreshBaseline();
+      window.dispatchEvent(new Event("beatahead-patient-record-updated"));
+      setMessage(`Vitals for ${new Date(`${vitalsDate}T00:00:00`).toLocaleDateString()} saved.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save daily vitals.");
+    } finally {
+      setIsSavingVitals(false);
+    }
+  }
 
   async function saveRecord(e?: FormEvent<HTMLFormElement>) {
     e?.preventDefault();
@@ -476,7 +577,7 @@ function HealthRecordPageContent() {
 
   const bmiVal = bmi(record.heightCm, record.weightKg);
   const bmiLbl = bmiLabel(record.heightCm, record.weightKg);
-  const bpRisk = bpRiskLabel(record.systolicBP, record.diastolicBP);
+  const bpRisk = bpRiskLabel(dailyVitals.systolicBP, dailyVitals.diastolicBP);
 
   const animClass = animating
     ? animDir === "forward"
@@ -749,12 +850,18 @@ function HealthRecordPageContent() {
                     </div>
                   </div>
 
+                  <label className="block mb-5">
+                    <FieldLabel>Date of Reading</FieldLabel>
+                    <input className={inputCls} type="date" value={vitalsDate} max={localDateKey()}
+                      onChange={(e) => selectVitalsDate(e.target.value)} disabled={isLoading || isSavingVitals} />
+                  </label>
+
                   <div className="grid gap-5 sm:grid-cols-2">
                     <NumberField
                       label="Systolic BP"
-                      value={record.systolicBP}
-                      onChange={(v) => field("systolicBP", v)}
-                      disabled={isLoading}
+                      value={dailyVitals.systolicBP}
+                      onChange={(v) => setDailyVitals((c) => ({ ...c, systolicBP: v }))}
+                      disabled={isLoading || isSavingVitals}
                       placeholder="e.g. 120"
                       min={60} max={300}
                       unit="mmHg"
@@ -762,9 +869,9 @@ function HealthRecordPageContent() {
                     />
                     <NumberField
                       label="Diastolic BP"
-                      value={record.diastolicBP}
-                      onChange={(v) => field("diastolicBP", v)}
-                      disabled={isLoading}
+                      value={dailyVitals.diastolicBP}
+                      onChange={(v) => setDailyVitals((c) => ({ ...c, diastolicBP: v }))}
+                      disabled={isLoading || isSavingVitals}
                       placeholder="e.g. 80"
                       min={40} max={200}
                       unit="mmHg"
@@ -773,11 +880,11 @@ function HealthRecordPageContent() {
                   </div>
 
                   {/* BP reading card */}
-                  {(record.systolicBP || record.diastolicBP) && (
+                  {(dailyVitals.systolicBP || dailyVitals.diastolicBP) && (
                     <div className="mt-4 flex items-center gap-4 rounded-xl border border-white/8 bg-white/3 p-4">
                       <div className="text-center">
                         <p className="text-2xl font-bold text-white tabular-nums">
-                          {record.systolicBP ?? "–"}/{record.diastolicBP ?? "–"}
+                          {dailyVitals.systolicBP ?? "–"}/{dailyVitals.diastolicBP ?? "–"}
                         </p>
                         <p className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">mmHg</p>
                       </div>
@@ -793,9 +900,9 @@ function HealthRecordPageContent() {
                   <div className="grid gap-5 sm:grid-cols-2 mt-5">
                     <NumberField
                       label="Resting Heart Rate"
-                      value={record.restingHeartRate}
-                      onChange={(v) => field("restingHeartRate", v)}
-                      disabled={isLoading}
+                      value={dailyVitals.restingHeartRate}
+                      onChange={(v) => setDailyVitals((c) => ({ ...c, restingHeartRate: v }))}
+                      disabled={isLoading || isSavingVitals}
                       placeholder="e.g. 72"
                       min={30} max={250}
                       unit="bpm"
@@ -803,10 +910,10 @@ function HealthRecordPageContent() {
                     />
                     <SelectField
                       label="BP Category (if known)"
-                      value={record.bloodPressureCategory}
+                      value={dailyVitals.bloodPressureCategory}
                       options={BLOOD_PRESSURE_OPTIONS}
-                      disabled={isLoading}
-                      onChange={(v) => field("bloodPressureCategory", v as PatientRecord["bloodPressureCategory"])}
+                      disabled={isLoading || isSavingVitals}
+                      onChange={(v) => setDailyVitals((c) => ({ ...c, bloodPressureCategory: v as PatientRecord["bloodPressureCategory"] }))}
                       icon={<Activity className="w-4 h-4" />}
                     />
                   </div>
@@ -818,9 +925,9 @@ function HealthRecordPageContent() {
                         className={inputCls}
                         type="text"
                         maxLength={120}
-                        value={record.ecgValue ?? ""}
-                        onChange={(e) => field("ecgValue", e.target.value)}
-                        disabled={isLoading}
+                        value={dailyVitals.ecgValue}
+                        onChange={(e) => setDailyVitals((c) => ({ ...c, ecgValue: e.target.value }))}
+                        disabled={isLoading || isSavingVitals}
                         placeholder="e.g. 0.8 mV"
                       />
                     </label>
@@ -830,13 +937,32 @@ function HealthRecordPageContent() {
                         className={inputCls}
                         type="text"
                         maxLength={120}
-                        value={record.ppgValue ?? ""}
-                        onChange={(e) => field("ppgValue", e.target.value)}
-                        disabled={isLoading}
+                        value={dailyVitals.ppgValue}
+                        onChange={(e) => setDailyVitals((c) => ({ ...c, ppgValue: e.target.value }))}
+                        disabled={isLoading || isSavingVitals}
                         placeholder="e.g. 0.6 (amplitude)"
                       />
                     </label>
                   </div>
+                  <button type="button" onClick={saveDailyVitals} disabled={isLoading || isSavingVitals}
+                    className="mt-5 w-full rounded-xl bg-red-500 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+                    {isSavingVitals ? "Saving daily vitals..." : `Save Vitals for ${vitalsDate}`}
+                  </button>
+                  {record.vitalsHistory.length > 0 && (
+                    <div className="mt-6 overflow-x-auto">
+                      <h3 className="mb-2 text-sm font-semibold text-white">Saved Daily Readings</h3>
+                      <table className="w-full min-w-[650px] text-left text-xs text-white/70">
+                        <thead><tr className="border-b border-white/10 text-white/40"><th className="p-2">Date</th><th className="p-2">BP (mmHg)</th><th className="p-2">Category</th><th className="p-2">HR (bpm)</th><th className="p-2">ECG</th><th className="p-2">PPG</th></tr></thead>
+                        <tbody>{record.vitalsHistory.slice(-7).reverse().map((entry) => (
+                          <tr key={entry.date} className="border-b border-white/5">
+                            <td className="p-2"><button type="button" className="text-red-300 underline" onClick={() => selectVitalsDate(entry.date)}>{entry.date}</button></td>
+                            <td className="p-2">{entry.systolicBP ?? "-"}/{entry.diastolicBP ?? "-"}</td>
+                            <td className="p-2">{entry.bloodPressureCategory || "-"}</td>
+                            <td className="p-2">{entry.restingHeartRate ?? "-"}</td><td className="p-2">{entry.ecgValue || "-"}</td><td className="p-2">{entry.ppgValue || "-"}</td>
+                          </tr>))}</tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {/* Cholesterol & Lifestyle */}

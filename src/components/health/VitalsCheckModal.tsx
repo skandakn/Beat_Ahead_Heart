@@ -12,6 +12,8 @@ import {
   STRESS_LEVEL_OPTIONS,
   DIET_TYPE_OPTIONS,
   type PatientRecord,
+  localDateKey,
+  upsertDailyVitalsEntry,
 } from "@/lib/patient-record";
 import { Button } from "@/components/ui/button";
 import {
@@ -211,6 +213,16 @@ export function VitalsCheckModal() {
         userId: effectiveUserId,
         updatedAt: new Date().toISOString(),
       };
+      const dailyEntry = {
+        date: localDateKey(),
+        systolicBP: vitals.systolicBP ?? null,
+        diastolicBP: vitals.diastolicBP ?? null,
+        restingHeartRate: vitals.restingHeartRate ?? null,
+        ecgValue: rec.ecgValue ?? "",
+        ppgValue: rec.ppgValue ?? "",
+        bloodPressureCategory: vitals.bloodPressureCategory ?? "",
+      } as const;
+      updated.vitalsHistory = upsertDailyVitalsEntry(rec.vitalsHistory, dailyEntry);
 
       // Validate via API (stateless — just sanitises and returns)
       const res = await fetch("/api/patient-record", {
@@ -229,6 +241,7 @@ export function VitalsCheckModal() {
           emergencyContactName: rec.emergencyContactName,
           emergencyContactPhone: rec.emergencyContactPhone,
           primaryCarePhysician: rec.primaryCarePhysician, notes: rec.notes,
+          vitalsHistory: updated.vitalsHistory,
         }),
       });
 

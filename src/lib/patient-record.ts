@@ -31,6 +31,16 @@ export type DiabetesStatus = (typeof DIABETES_STATUS_OPTIONS)[number] | "";
 export const CHOLESTEROL_STATUS_OPTIONS = ["normal", "borderline", "high", "unknown"] as const;
 export type CholesterolStatus = (typeof CHOLESTEROL_STATUS_OPTIONS)[number] | "";
 
+export interface DailyVitalsEntry {
+  date: string;
+  systolicBP: number | null;
+  diastolicBP: number | null;
+  restingHeartRate: number | null;
+  ecgValue: string;
+  ppgValue: string;
+  bloodPressureCategory: BloodPressureCategory;
+}
+
 export interface PatientRecord {
   userId: string;
   createdAt: string;
@@ -53,6 +63,7 @@ export interface PatientRecord {
   ecgValue: string;
   ppgValue: string;
   bloodPressureCategory: BloodPressureCategory;
+  vitalsHistory: DailyVitalsEntry[];
   cholesterolStatus: CholesterolStatus;
   // Medical history
   conditions: string[];
@@ -103,6 +114,7 @@ export function createEmptyPatientRecord(userId: string, timestamp = new Date().
     ecgValue: "",
     ppgValue: "",
     bloodPressureCategory: "",
+    vitalsHistory: [],
     cholesterolStatus: "",
     conditions: [],
     medications: [],
@@ -162,6 +174,47 @@ function optionalEnum<T extends string>(value: unknown, field: string, options: 
   return trimmed;
 }
 
+export function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function upsertDailyVitalsEntry(
+  history: DailyVitalsEntry[] | undefined,
+  entry: DailyVitalsEntry
+): DailyVitalsEntry[] {
+  return [...(history ?? []).filter((item) => item.date !== entry.date), entry]
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function dailyVitalsHistory(value: unknown): DailyVitalsEntry[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 10_000) {
+    throw new Error("Vitals history must contain no more than 10,000 daily entries.");
+  }
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`Vitals entry ${index + 1} is invalid.`);
+    }
+    const input = item as Record<string, unknown>;
+    const date = optionalText(input.date, "Vitals date", 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) {
+      throw new Error("Vitals dates must use a valid YYYY-MM-DD date.");
+    }
+    return {
+      date,
+      systolicBP: optionalMeasurement(input.systolicBP, "Systolic BP", 1, 300),
+      diastolicBP: optionalMeasurement(input.diastolicBP, "Diastolic BP", 1, 200),
+      restingHeartRate: optionalMeasurement(input.restingHeartRate, "Resting heart rate", 1, 300),
+      ecgValue: optionalText(input.ecgValue, "ECG value", 120),
+      ppgValue: optionalText(input.ppgValue, "PPG value", 120),
+      bloodPressureCategory: optionalEnum(input.bloodPressureCategory, "Blood pressure", BLOOD_PRESSURE_OPTIONS),
+    };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function validatePatientRecordUpdate(value: unknown): PatientRecordUpdate {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("A patient record object is required.");
@@ -189,6 +242,7 @@ export function validatePatientRecordUpdate(value: unknown): PatientRecordUpdate
     ecgValue: optionalText(input.ecgValue, "ECG value", 120),
     ppgValue: optionalText(input.ppgValue, "PPG value", 120),
     bloodPressureCategory: optionalEnum(input.bloodPressureCategory, "Blood pressure", BLOOD_PRESSURE_OPTIONS),
+    vitalsHistory: dailyVitalsHistory(input.vitalsHistory),
     cholesterolStatus: optionalEnum(input.cholesterolStatus, "Cholesterol status", CHOLESTEROL_STATUS_OPTIONS),
     conditions: stringList(input.conditions, "Conditions"),
     medications: stringList(input.medications, "Medications"),

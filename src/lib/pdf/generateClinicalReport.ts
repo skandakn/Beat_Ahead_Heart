@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import type { PatientRecord } from "@/lib/isi/types";
 import { MEDICAL_DISCLAIMER } from "@/lib/isi/types";
 import { getTrendLabel } from "@/lib/utils";
+import type { PatientRecord as HealthRecord } from "@/lib/patient-record";
 
 /**
  * Format timestamp to readable string
@@ -498,7 +499,7 @@ export async function generateCohortPDF(patients: PatientRecord[]): Promise<void
 /**
  * Generates and downloads a personal health record PDF for the user.
  */
-export async function generatePersonalHealthRecordPDF(record: any): Promise<void> {
+export async function generatePersonalHealthRecordPDF(record: HealthRecord): Promise<void> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -569,13 +570,14 @@ export async function generatePersonalHealthRecordPDF(record: any): Promise<void
   doc.text("Cardiovascular Vitals & Hemodynamics", margin, y);
   y += 4;
 
+  const latestVitals = record.vitalsHistory?.[record.vitalsHistory.length - 1];
   const vitals = [
-    { label: "Resting Heart Rate", val: record.restingHeartRate ? `${record.restingHeartRate} bpm` : "72 bpm (Standard Baseline)" },
-    { label: "Blood Pressure", val: (record.systolicBP && record.diastolicBP) ? `${record.systolicBP}/${record.diastolicBP} mmHg` : "120/80 mmHg (Normotensive)" },
-    { label: "Hypertension Category", val: record.bloodPressureCategory || "Normal" },
-    { label: "Cholesterol Profile", val: record.cholesterolStatus || "Normal" },
-    { label: "Exercise Frequency", val: record.exerciseFrequency || "Moderate" },
-    { label: "Smoking Status", val: record.smokingStatus || "Never" },
+    { label: "Resting Heart Rate", val: latestVitals?.restingHeartRate ? `${latestVitals.restingHeartRate} bpm` : "Not recorded" },
+    { label: "Blood Pressure", val: latestVitals?.systolicBP && latestVitals?.diastolicBP ? `${latestVitals.systolicBP}/${latestVitals.diastolicBP} mmHg` : "Not recorded" },
+    { label: "Hypertension Category", val: latestVitals?.bloodPressureCategory || "Not recorded" },
+    { label: "Cholesterol Profile", val: record.cholesterolStatus || "Not recorded" },
+    { label: "Exercise Frequency", val: record.exerciseFrequency || "Not recorded" },
+    { label: "Smoking Status", val: record.smokingStatus || "Not recorded" },
   ];
 
   doc.setFillColor(241, 245, 249);
@@ -688,19 +690,70 @@ export async function generatePersonalHealthRecordPDF(record: any): Promise<void
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(15, 23, 42);
-  doc.text(record.primaryPhysicianName || "Not assigned", margin + cardW2 + 8, y + 11);
+  doc.text(record.primaryCarePhysician || "Not assigned", margin + cardW2 + 8, y + 11);
   doc.setFontSize(7.5);
   doc.setTextColor(71, 85, 105);
-  doc.text(record.primaryPhysicianPhone || "—", margin + cardW2 + 8, y + 15.5);
+  doc.text("—", margin + cardW2 + 8, y + 15.5);
 
-  // Footer Disclaimer
-  doc.setFillColor(254, 242, 242);
-  doc.roundedRect(margin, pageHeight - 26, contentWidth, 14, 1.5, 1.5, "FD");
-  doc.setFontSize(6.5);
-  doc.setTextColor(159, 18, 57);
-  doc.setFont("helvetica", "normal");
-  doc.text("DISCLAIMER: Patient-reported health profile for BeatAhead personal baseline calibration.", margin + 4, pageHeight - 20);
-  doc.text("Not a substitute for official medical records or hospital electronic health records (EHR).", margin + 4, pageHeight - 16);
+  // Include every saved daily reading, continuing across pages when needed.
+  y += 28;
+  const history = [...(record.vitalsHistory ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const drawHistoryHeading = () => {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("Dated Blood Pressure, Heart Rate & Signal Readings", margin, y);
+    y += 5;
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, y, contentWidth, 7, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+    doc.setFont("helvetica", "bold");
+    ["DATE", "BP (mmHg)", "HR (bpm)", "BP CATEGORY", "ECG", "PPG"].forEach((label, i) =>
+      doc.text(label, [margin + 3, margin + 26, margin + 55, margin + 77, margin + 108, margin + 145][i], y + 4.7));
+    y += 7;
+  };
+  drawHistoryHeading();
+  if (history.length === 0) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("No dated vitals have been recorded.", margin + 3, y + 5);
+    y += 10;
+  }
+  history.forEach((entry, index) => {
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(51, 65, 85);
+    const cells = [entry.date, `${entry.systolicBP ?? "-"}/${entry.diastolicBP ?? "-"}`, entry.restingHeartRate == null ? "-" : String(entry.restingHeartRate), entry.bloodPressureCategory || "-", entry.ecgValue || "-", entry.ppgValue || "-"];
+    const xs = [margin + 3, margin + 26, margin + 55, margin + 77, margin + 108, margin + 145];
+    const widths = [21, 27, 20, 29, 34, 34];
+    const lines = cells.map((cell, i) => doc.splitTextToSize(cell, widths[i]));
+    const rowHeight = Math.max(7, ...lines.map((value) => value.length * 3.3 + 2));
+    if (y + rowHeight > pageHeight - 32) {
+      doc.addPage();
+      y = margin;
+      drawHistoryHeading();
+    }
+    if (index % 2 === 1) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, y, contentWidth, rowHeight, "F");
+    }
+    lines.forEach((value, i) => doc.text(value, xs[i], y + 3.5, { maxWidth: widths[i] }));
+    y += rowHeight;
+  });
+
+  // Footer disclaimer on every page.
+  for (let page = 1; page <= doc.getNumberOfPages(); page++) {
+    doc.setPage(page);
+    doc.setFillColor(254, 242, 242);
+    doc.roundedRect(margin, pageHeight - 26, contentWidth, 14, 1.5, 1.5, "FD");
+    doc.setFontSize(6.5);
+    doc.setTextColor(159, 18, 57);
+    doc.setFont("helvetica", "normal");
+    doc.text("DISCLAIMER: Patient-reported health profile for BeatAhead personal baseline calibration.", margin + 4, pageHeight - 20);
+    doc.text("Not a substitute for official medical records or hospital electronic health records (EHR).", margin + 4, pageHeight - 16);
+  }
 
   doc.save("beatahead-personal-health-record.pdf");
 }
