@@ -2,7 +2,7 @@
 
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { cn, getISILabel } from "@/lib/utils";
-import { Info, ShieldAlert, CheckCircle2, Cpu } from "lucide-react";
+import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MEDICAL_DISCLAIMER } from "@/lib/isi/types";
 
@@ -28,10 +28,6 @@ export function ISIGauge({
   const confidence = propConfidence ?? currentScore?.confidence ?? 0;
   const deviation = score - baseline;
 
-  const modelEvidencePct = currentScore?.modelEvidence !== undefined 
-    ? (currentScore.modelEvidence * 100).toFixed(1) 
-    : "--";
-  const modelAlert = currentScore?.modelAlert ?? false;
   const productState = currentScore?.state ?? "Normal / Stable";
 
   const circumference = 2 * Math.PI * 88;
@@ -78,29 +74,6 @@ export function ISIGauge({
       <span className="mt-1 text-[11px] font-medium text-navy-500 bg-navy-50 px-2 py-0.5 rounded-full border border-navy-100">
         Status: {productState}
       </span>
-
-      {/* Model Information Separator (Task 10 Requirement) */}
-      <div className="mt-3 w-full p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-        <div className="flex items-center justify-between font-medium">
-          <span className="text-slate-600 flex items-center gap-1">
-            <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-            Model Evidence:
-          </span>
-          <span className="font-mono font-bold text-navy-900">{modelEvidencePct}%</span>
-        </div>
-        <div className="flex items-center justify-between font-medium">
-          <span className="text-slate-600">Model State:</span>
-          <span className={cn(
-            "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold",
-            modelAlert 
-              ? "bg-rose-100 text-rose-800 border border-rose-200" 
-              : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-          )}>
-            {modelAlert ? <ShieldAlert className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-            {modelAlert ? "ALERT (≥ 0.156742)" : "NORMAL (< 0.156742)"}
-          </span>
-        </div>
-      </div>
 
       <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs w-full">
         <div>
