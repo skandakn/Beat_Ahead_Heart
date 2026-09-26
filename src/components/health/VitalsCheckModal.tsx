@@ -146,6 +146,8 @@ export function VitalsCheckModal() {
     systolicBP: null as number | null,
     diastolicBP: null as number | null,
     restingHeartRate: null as number | null,
+    ecgValue: "",
+    ppgValue: "",
     bloodPressureCategory: "" as PatientRecord["bloodPressureCategory"],
     cholesterolStatus: "" as PatientRecord["cholesterolStatus"],
     smokingStatus: "" as PatientRecord["smokingStatus"],
@@ -165,16 +167,19 @@ export function VitalsCheckModal() {
     const alreadyChecked = sessionStorage.getItem(VITALS_SESSION_KEY);
     if (alreadyChecked) return;
 
-    // Pre-populate from existing saved record
+    setSaved(false);
+    // Keep saved profile fields, but require fresh daily readings for each sign-in.
     try {
       const stored = localStorage.getItem(lsKey);
       if (stored) {
         const rec = JSON.parse(stored) as PatientRecord;
         setVitals({
-          systolicBP: rec.systolicBP,
-          diastolicBP: rec.diastolicBP,
-          restingHeartRate: rec.restingHeartRate,
-          bloodPressureCategory: rec.bloodPressureCategory,
+          systolicBP: null,
+          diastolicBP: null,
+          restingHeartRate: null,
+          ecgValue: "",
+          ppgValue: "",
+          bloodPressureCategory: "",
           cholesterolStatus: rec.cholesterolStatus,
           smokingStatus: rec.smokingStatus,
           alcoholUse: rec.alcoholUse,
@@ -184,6 +189,9 @@ export function VitalsCheckModal() {
           chestPainHistory: rec.chestPainHistory,
           shortnessOfBreath: rec.shortnessOfBreath,
         });
+      } else {
+        setVitals((current) => ({ ...current, systolicBP: null, diastolicBP: null,
+          restingHeartRate: null, ecgValue: "", ppgValue: "", bloodPressureCategory: "" }));
       }
     } catch {/* ignore */}
 
@@ -218,8 +226,8 @@ export function VitalsCheckModal() {
         systolicBP: vitals.systolicBP ?? null,
         diastolicBP: vitals.diastolicBP ?? null,
         restingHeartRate: vitals.restingHeartRate ?? null,
-        ecgValue: rec.ecgValue ?? "",
-        ppgValue: rec.ppgValue ?? "",
+        ecgValue: vitals.ecgValue,
+        ppgValue: vitals.ppgValue,
         bloodPressureCategory: vitals.bloodPressureCategory ?? "",
       } as const;
       updated.vitalsHistory = upsertDailyVitalsEntry(rec.vitalsHistory, dailyEntry);
@@ -241,6 +249,7 @@ export function VitalsCheckModal() {
           emergencyContactName: rec.emergencyContactName,
           emergencyContactPhone: rec.emergencyContactPhone,
           primaryCarePhysician: rec.primaryCarePhysician, notes: rec.notes,
+          ecgValue: vitals.ecgValue, ppgValue: vitals.ppgValue,
           vitalsHistory: updated.vitalsHistory,
         }),
       });
@@ -252,8 +261,18 @@ export function VitalsCheckModal() {
       try {
         const stored = localStorage.getItem(lsKey);
         const rec = stored ? (JSON.parse(stored) as PatientRecord) : createEmptyPatientRecord(effectiveUserId);
+        const history = upsertDailyVitalsEntry(rec.vitalsHistory, {
+          date: localDateKey(),
+          systolicBP: vitals.systolicBP,
+          diastolicBP: vitals.diastolicBP,
+          restingHeartRate: vitals.restingHeartRate,
+          ecgValue: vitals.ecgValue,
+          ppgValue: vitals.ppgValue,
+          bloodPressureCategory: vitals.bloodPressureCategory,
+        });
         localStorage.setItem(lsKey, JSON.stringify({
-          ...rec, ...vitals, userId: effectiveUserId, updatedAt: new Date().toISOString(),
+          ...rec, ...vitals, vitalsHistory: history,
+          userId: effectiveUserId, updatedAt: new Date().toISOString(),
         }));
       } catch {/* ignore */}
     } finally {
@@ -353,6 +372,20 @@ export function VitalsCheckModal() {
                   options={BLOOD_PRESSURE_OPTIONS}
                   onChange={(v) => set("bloodPressureCategory", v as PatientRecord["bloodPressureCategory"])}
                   icon={<Activity className="w-4 h-4" />} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/40">ECG Value</span>
+                  <input className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-red-500/50"
+                    type="text" maxLength={120} value={vitals.ecgValue}
+                    onChange={(e) => set("ecgValue", e.target.value)} placeholder="e.g. 0.8 mV" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/40">PPG Value</span>
+                  <input className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-red-500/50"
+                    type="text" maxLength={120} value={vitals.ppgValue}
+                    onChange={(e) => set("ppgValue", e.target.value)} placeholder="e.g. 0.6 amplitude" />
+                </label>
               </div>
             </section>
 

@@ -50,6 +50,58 @@ function getStoredDemoUser(): BeatAheadUser | null {
   return null;
 }
 
+function stableDemoUserId(email?: string | null): string {
+  const normalizedEmail = (email ?? "demo-user@beatahead.local").trim().toLowerCase();
+  let hash = 2166136261;
+  for (let i = 0; i < normalizedEmail.length; i++) {
+    hash = Math.imul(hash ^ normalizedEmail.charCodeAt(i), 16777619);
+  }
+  return `user_google_${(hash >>> 0).toString(36)}`;
+}
+
+function migrateDemoHealthRecord(previousId: string, nextId: string) {
+  if (typeof window === "undefined" || previousId === nextId) return;
+  try {
+    const previousKey = `beatahead-patient-record-${previousId}`;
+    const nextKey = `beatahead-patient-record-${nextId}`;
+    const previousRecord = localStorage.getItem(previousKey);
+    if (previousRecord && !localStorage.getItem(nextKey)) {
+      const record = JSON.parse(previousRecord) as Record<string, unknown>;
+      localStorage.setItem(nextKey, JSON.stringify({ ...record, userId: nextId }));
+    }
+  } catch (error) {
+    console.error("Unable to migrate the saved health record to the stable demo account:", error);
+  }
+}
+
+function migrateSingleLegacyDemoHealthRecord(nextId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const nextKey = `beatahead-patient-record-${nextId}`;
+    if (localStorage.getItem(nextKey)) return;
+    const prefix = "beatahead-patient-record-user_google_";
+    const legacyKeys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+      .filter((key): key is string => Boolean(key?.startsWith(prefix) && /^\d+$/.test(key.slice(prefix.length))));
+    // A single legacy demo record is unambiguous. With multiple records, keep them
+    // isolated instead of risking attaching one person's health data to another.
+    if (legacyKeys.length !== 1) return;
+    const value = localStorage.getItem(legacyKeys[0]);
+    if (!value) return;
+    const record = JSON.parse(value) as Record<string, unknown>;
+    localStorage.setItem(nextKey, JSON.stringify({ ...record, userId: nextId }));
+  } catch (error) {
+    console.error("Unable to migrate the legacy demo health record:", error);
+  }
+}
+
+function normalizeStoredDemoUser(user: BeatAheadUser | null): BeatAheadUser | null {
+  if (!user) return null;
+  const normalized = { ...user, id: stableDemoUserId(user.email) };
+  migrateDemoHealthRecord(user.id, normalized.id);
+  if (normalized.id !== user.id) persistDemoUser(normalized);
+  return normalized;
+}
+
 function persistDemoUser(user: BeatAheadUser | null) {
   if (typeof window === "undefined") return;
   try {
@@ -76,20 +128,24 @@ function ClerkAuthBridge({ children }: { children: React.ReactNode }) {
   const [demoLoaded, setDemoLoaded] = useState(false);
 
   useEffect(() => {
-    setDemoUser(getStoredDemoUser());
+    setDemoUser(normalizeStoredDemoUser(getStoredDemoUser()));
     setDemoLoaded(true);
   }, []);
 
   const signInDemoUser = useCallback(
     (demoUserArg?: { email?: string; name?: string; imageUrl?: string }) => {
+      const email = demoUserArg?.email || "skandakn13@gmail.com";
       const newUser: BeatAheadUser = {
-        id: `user_google_${Date.now()}`,
+        id: stableDemoUserId(email),
         fullName: demoUserArg?.name || "Skanda K N",
-        email: demoUserArg?.email || "skandakn13@gmail.com",
+        email,
         imageUrl:
           demoUserArg?.imageUrl ||
           "https://lh3.googleusercontent.com/a/ACg8ocIq_placeholder=s96-c",
       };
+      const previousUser = getStoredDemoUser();
+      if (previousUser) migrateDemoHealthRecord(previousUser.id, newUser.id);
+      migrateSingleLegacyDemoHealthRecord(newUser.id);
       setDemoUser(newUser);
       persistDemoUser(newUser);
       // Clear vitals session flag so the modal re-appears on this new sign-in
@@ -99,6 +155,7 @@ function ClerkAuthBridge({ children }: { children: React.ReactNode }) {
   );
 
   const handleSignOut = async () => {
+    if (demoUser) migrateDemoHealthRecord(demoUser.id, stableDemoUserId(demoUser.email));
     setDemoUser(null);
     persistDemoUser(null);
     // Clear vitals session flag on sign-out too
@@ -147,20 +204,24 @@ function UnconfiguredAuthBridge({ children }: { children: React.ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    setSessionUser(getStoredDemoUser());
+    setSessionUser(normalizeStoredDemoUser(getStoredDemoUser()));
     setIsLoaded(true);
   }, []);
 
   const signInDemoUser = useCallback(
     (demoUser?: { email?: string; name?: string; imageUrl?: string }) => {
+      const email = demoUser?.email || "skandakn13@gmail.com";
       const newUser: BeatAheadUser = {
-        id: `user_google_${Date.now()}`,
+        id: stableDemoUserId(email),
         fullName: demoUser?.name || "Skanda K N",
-        email: demoUser?.email || "skandakn13@gmail.com",
+        email,
         imageUrl:
           demoUser?.imageUrl ||
           "https://lh3.googleusercontent.com/a/ACg8ocIq_placeholder=s96-c",
       };
+      const previousUser = getStoredDemoUser();
+      if (previousUser) migrateDemoHealthRecord(previousUser.id, newUser.id);
+      migrateSingleLegacyDemoHealthRecord(newUser.id);
       setSessionUser(newUser);
       persistDemoUser(newUser);
       // Clear vitals session flag so the modal re-appears on this new sign-in
@@ -170,12 +231,13 @@ function UnconfiguredAuthBridge({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    if (sessionUser) migrateDemoHealthRecord(sessionUser.id, stableDemoUserId(sessionUser.email));
     setSessionUser(null);
     persistDemoUser(null);
     // Clear vitals session flag on sign-out
     try { sessionStorage.removeItem("beatahead-vitals-session-checked"); } catch {/* ignore */}
     router.push("/sign-in");
-  }, [router]);
+  }, [router, sessionUser]);
 
   return (
     <BeatAheadAuthContext.Provider
