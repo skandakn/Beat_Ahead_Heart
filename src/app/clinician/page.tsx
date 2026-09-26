@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { generatePatients } from "@/lib/isi/simulation";
 import { useSubscription } from "@/lib/subscription/SubscriptionContext";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
@@ -17,19 +16,17 @@ import { BaselineCard } from "@/components/isi/BaselineCard";
 import {
   Download,
   ChevronRight,
-  Cpu,
   FileText,
   User,
   HeartPulse,
   Activity,
   Droplets,
   ExternalLink,
-  ShieldCheck,
   CheckCircle2,
 } from "lucide-react";
 import type { PatientRecord } from "@/lib/isi/types";
 import { MEDICAL_DISCLAIMER } from "@/lib/isi/types";
-import { generateClinicalPDF, generateCohortPDF } from "@/lib/pdf/generateClinicalReport";
+import { generateClinicalPDF } from "@/lib/pdf/generateClinicalReport";
 import Link from "next/link";
 
 export default function ClinicianPage() {
@@ -44,7 +41,6 @@ export default function ClinicianPage() {
     healthRecord,
   } = useSimulation();
 
-  const [cohortPatients] = useState<PatientRecord[]>(() => generatePatients());
   const [selectedId, setSelectedId] = useState<string>("USER_PRIMARY");
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
@@ -70,26 +66,14 @@ export default function ClinicianPage() {
     };
   }, [userName, currentScore, currentSample, baseline, history, features]);
 
-  // Combined patient list with the authenticated user always first
-  const allPatients = useMemo(() => {
-    return [userPatient, ...cohortPatients];
-  }, [userPatient, cohortPatients]);
-
-  const selected = useMemo(() => {
-    if (selectedId === "USER_PRIMARY" || selectedId === userPatient.id) {
-      return userPatient;
-    }
-    return cohortPatients.find((p) => p.id === selectedId) ?? userPatient;
-  }, [selectedId, userPatient, cohortPatients]);
+  // Sole active patient is the logged-in user
+  const allPatients = useMemo(() => [userPatient], [userPatient]);
+  const selected = userPatient;
 
   const exportPDF = async () => {
     setIsExportingPdf(true);
     try {
-      if (selected) {
-        await generateClinicalPDF(selected);
-      } else {
-        await generateCohortPDF(allPatients);
-      }
+      await generateClinicalPDF(userPatient);
     } catch (err) {
       console.error("Failed to generate PDF report:", err);
     } finally {
@@ -155,67 +139,36 @@ export default function ClinicianPage() {
         </div>
       </div>
 
-      {/* Model Spec Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>Clinical decision support prototype — Results require a measured 26-feature Matrix A vector. Not a diagnostic system.</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 font-mono text-[11px] text-blue-900">
-          <Cpu className="w-3.5 h-3.5" />
-          <span>BeatAhead Phase 5 XGBoost (τ = 0.156742)</span>
-        </div>
-      </div>
-
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Patient List (Left Column) */}
         <Card className="lg:col-span-1 h-fit border-navy-200 shadow-card">
           <CardHeader className="border-b border-navy-100 bg-navy-50/50 py-3.5 px-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-bold text-navy-900">Patient Cohort</CardTitle>
-              <span className="text-xs bg-navy-100 text-navy-700 px-2 py-0.5 rounded-full font-semibold">
-                {allPatients.length} Active
+              <CardTitle className="text-sm font-bold text-navy-900">Active Patient</CardTitle>
+              <span className="text-xs bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-semibold">
+                1 Active
               </span>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-navy-100">
-              {allPatients.map((patient) => {
-                const isUser = patient.isCurrentUser;
-                const isSelected = selected.id === patient.id || (isUser && selectedId === "USER_PRIMARY");
-
-                return (
-                  <button
-                    key={patient.id}
-                    onClick={() => setSelectedId(isUser ? "USER_PRIMARY" : patient.id)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors",
-                      isSelected
-                        ? "bg-navy-50/80 border-l-4 border-cardiac"
-                        : "hover:bg-navy-50/50"
-                    )}
-                  >
-                    <div className="min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-bold text-navy-900 truncate">
-                          {patient.name || patient.id}
-                        </p>
-                        {isUser && (
-                          <span className="inline-flex items-center gap-1 rounded bg-cardiac/10 px-1.5 py-0.5 text-[10px] font-bold text-cardiac">
-                            <User className="h-2.5 w-2.5" />
-                            YOU (LIVE)
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-navy-500 mt-0.5">
-                        ISI: <span className="font-semibold text-navy-800">{patient.currentISI}</span> · {getTrendLabel(patient.trend)}
-                        {isUser && " · Telemetry Active"}
-                      </p>
-                    </div>
-                    <ChevronRight className={cn("w-4 h-4 shrink-0 transition-transform", isSelected ? "text-cardiac translate-x-0.5" : "text-navy-300")} />
-                  </button>
-                );
-              })}
+              <div className="w-full flex items-center justify-between px-4 py-3.5 text-left bg-navy-50/80 border-l-4 border-cardiac">
+                <div className="min-w-0 pr-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-sm font-bold text-navy-900 truncate">
+                      {userPatient.name}
+                    </p>
+                    <span className="inline-flex items-center gap-1 rounded bg-cardiac/10 px-1.5 py-0.5 text-[10px] font-bold text-cardiac">
+                      <User className="h-2.5 w-2.5" />
+                      YOU (LIVE)
+                    </span>
+                  </div>
+                  <p className="text-xs text-navy-500 mt-0.5">
+                    ISI: <span className="font-semibold text-navy-800">{userPatient.currentISI}</span> · {getTrendLabel(userPatient.trend)} · Telemetry Active
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 shrink-0 text-cardiac" />
+              </div>
             </div>
           </CardContent>
         </Card>
