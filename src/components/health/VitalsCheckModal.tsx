@@ -378,18 +378,31 @@ export function VitalsCheckModal() {
                   onChange={(v) => set("bloodPressureCategory", v as PatientRecord["bloodPressureCategory"])}
                   icon={<Activity className="w-4 h-4" />} />
               </div>
-              <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                <NumField label="Blood Oxygen (SpO₂)" value={vitals.spo2}
+                  onChange={(v) => set("spo2", v)} placeholder="e.g. 98"
+                  min={60} max={100} unit="%" icon={<Heart className="w-4 h-4" />} />
                 <label className="block">
-                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/40">ECG Value</span>
-                  <input className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-red-500/50"
-                    type="text" maxLength={120} value={vitals.ecgValue}
-                    onChange={(e) => set("ecgValue", e.target.value)} placeholder="e.g. 0.8 mV" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-white/50 mb-0.5">ECG Value</p>
+                  <input
+                    type="text"
+                    maxLength={120}
+                    value={vitals.ecgValue}
+                    onChange={(e) => set("ecgValue", e.target.value)}
+                    placeholder="e.g. 0.8 mV, ST elev"
+                    className={inputCls}
+                  />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/40">PPG Value</span>
-                  <input className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-red-500/50"
-                    type="text" maxLength={120} value={vitals.ppgValue}
-                    onChange={(e) => set("ppgValue", e.target.value)} placeholder="e.g. 0.6 amplitude" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-white/50 mb-0.5">PPG Value</p>
+                  <input
+                    type="text"
+                    maxLength={120}
+                    value={vitals.ppgValue}
+                    onChange={(e) => set("ppgValue", e.target.value)}
+                    placeholder="e.g. 0.85, normal"
+                    className={inputCls}
+                  />
                 </label>
               </div>
             </section>
