@@ -8,7 +8,7 @@ import { FitnessReport } from "@/components/fitness/FitnessReport";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SimulatedBadge } from "@/components/layout/Toast";
-import { Dumbbell, CheckCircle2, Calendar, TrendingUp, Clock, Target, Activity, History, Award } from "lucide-react";
+import { Dumbbell, Calendar, TrendingUp, Clock, Target, Activity, History, Award } from "lucide-react";
 import { EXERCISE_TYPE_LABELS } from "@/lib/fit-rest/types";
 import { cn } from "@/lib/utils";
 
@@ -261,46 +261,7 @@ function FitnessPageInner() {
         </div>
 
         {todaysWorkout ? (
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <WorkoutPlanCard workout={todaysWorkout} showDate={true} />
-            </div>
-
-            {/* ── Completion panel ──────────────────────────────────────── */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Workout Status</CardTitle>
-                  <CardDescription>
-                    Track your workout completion for today.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="rounded-lg border border-navy-100 bg-navy-50/50 p-4 text-center">
-                    <p className="text-sm font-medium text-navy-700 mb-1">
-                      Ready to start
-                    </p>
-                    <p className="text-xs text-navy-500">
-                      Complete this workout to track your progress
-                    </p>
-                  </div>
-
-                  <Button
-                    className="w-full"
-                    variant="default"
-                    disabled
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Mark as Complete
-                  </Button>
-
-                  <p className="text-[10px] text-navy-400 text-center leading-relaxed">
-                    Workout completion tracking coming soon. Focus on form and consistency.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <WorkoutPlanCard workout={todaysWorkout} showDate={true} />
         ) : (
           <Card>
             <CardContent className="py-12 text-center">
