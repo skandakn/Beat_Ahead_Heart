@@ -164,15 +164,23 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
     importPhoneNutritionData,
     clearGoogleFitError,
     applyVitalsToHealthRecord,
+    updateVitalsPreset,
   } = useFitRest();
 
   const [justSynced, setJustSynced] = useState(false);
   const [appliedVitals, setAppliedVitals] = useState(false);
+  const [presetFeedback, setPresetFeedback] = useState<string | null>(null);
 
   const handleApplyVitals = () => {
     applyVitalsToHealthRecord();
     setAppliedVitals(true);
     setTimeout(() => setAppliedVitals(false), 3000);
+  };
+
+  const handlePreset = (preset: "normal" | "elevated" | "recovery") => {
+    updateVitalsPreset(preset);
+    setPresetFeedback(preset);
+    setTimeout(() => setPresetFeedback(null), 3500);
   };
 
   const handleSync = async () => {
@@ -320,6 +328,86 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {appliedVitals ? "✓ Applied to ISI Baseline!" : "Apply Vitals to ISI Baseline"}
                   </Button>
+                </div>
+
+                {/* Interactive Presets: Test changing Google Fit values and observe live ISI change */}
+                <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-navy-900 flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-amber-500" />
+                      Dynamic ISI Recalibration Presets
+                    </p>
+                    {presetFeedback && (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full animate-pulse">
+                        ✓ Calibrated to {presetFeedback} vitals
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-navy-600 leading-relaxed">
+                    Changing Google Fit cardiovascular vitals instantly recalibrates your personal baseline ISI score across the Vital Agent, Dashboard, and Real-Time Signals:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      onClick={() => handlePreset("normal")}
+                      className="text-xs bg-white hover:bg-emerald-50 border-emerald-200 text-emerald-950 justify-start h-auto py-2 px-2.5 shadow-2xs"
+                    >
+                      <div className="text-left">
+                        <div className="font-bold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Optimal Vitals
+                        </div>
+                        <div className="text-[10px] text-navy-500 font-medium">
+                          HR 62 · 116/74 · 99% SpO₂
+                        </div>
+                        <div className="text-[9px] text-emerald-600 font-bold uppercase tracking-wider mt-0.5">
+                          Protective (Lower ISI)
+                        </div>
+                      </div>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      onClick={() => handlePreset("elevated")}
+                      className="text-xs bg-white hover:bg-red-50 border-red-200 text-red-950 justify-start h-auto py-2 px-2.5 shadow-2xs"
+                    >
+                      <div className="text-left">
+                        <div className="font-bold text-red-700 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                          Elevated Stress
+                        </div>
+                        <div className="text-[10px] text-navy-500 font-medium">
+                          HR 102 · 164/102 · 91% SpO₂
+                        </div>
+                        <div className="text-[9px] text-red-600 font-bold uppercase tracking-wider mt-0.5">
+                          Elevated Risk (Higher ISI)
+                        </div>
+                      </div>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      onClick={() => handlePreset("recovery")}
+                      className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-950 justify-start h-auto py-2 px-2.5 shadow-2xs"
+                    >
+                      <div className="text-left">
+                        <div className="font-bold text-blue-700 flex items-center gap-1">
+                          <HeartPulse className="w-3.5 h-3.5 text-blue-600" />
+                          Post-Exercise Recovery
+                        </div>
+                        <div className="text-[10px] text-navy-500 font-medium">
+                          HR 72 · 124/80 · 97% SpO₂
+                        </div>
+                        <div className="text-[9px] text-blue-600 font-bold uppercase tracking-wider mt-0.5">
+                          Moderate (Standard ISI)
+                        </div>
+                      </div>
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : variant === "nutri" ? (

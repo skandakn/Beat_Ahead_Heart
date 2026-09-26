@@ -25,7 +25,7 @@ import {
 import {
   computeRecoveryState,
 } from "./demo-data";
-import { localDateKey, upsertDailyVitalsEntry } from "@/lib/patient-record";
+import { localDateKey, upsertDailyVitalsEntry, createEmptyPatientRecord } from "@/lib/patient-record";
 
 // ─── Google Fit token shape (stored in localStorage) ─────────────────────────
 
@@ -74,6 +74,7 @@ interface FitRestContextValue {
   importPhoneNutritionData: () => void;
   clearGoogleFitError: () => void;
   applyVitalsToHealthRecord: () => void;
+  updateVitalsPreset: (preset: "normal" | "elevated" | "recovery") => void;
 }
 
 const FitRestContext = createContext<FitRestContextValue | null>(null);
@@ -744,6 +745,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
 
   const applyVitalsToHealthRecord = useCallback(() => {
     if (typeof window === "undefined" || !googleFitVitals) return;
+    let recordFound = false;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.startsWith("beatahead-patient-record")) {
@@ -768,6 +770,11 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
+          if (googleFitVitals.spo2?.current && currentRec.spo2 !== googleFitVitals.spo2.current) {
+            currentRec.spo2 = googleFitVitals.spo2.current;
+            changed = true;
+          }
+
           if (changed) {
             currentRec.vitalsHistory = upsertDailyVitalsEntry(currentRec.vitalsHistory, {
               date: localDateKey(),
@@ -778,17 +785,172 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
               ppgValue: currentRec.ppgValue ?? "",
               bloodPressureCategory: currentRec.bloodPressureCategory ?? "",
             });
-          }
-
-          if (changed) {
             currentRec.updatedAt = new Date().toISOString();
             localStorage.setItem(key, JSON.stringify(currentRec));
-            window.dispatchEvent(new Event("beatahead-patient-record-updated"));
           }
+          recordFound = true;
         } catch {}
       }
     }
+
+    if (!recordFound) {
+      try {
+        const defaultRec = createEmptyPatientRecord("demo-user-1");
+        if (googleFitVitals.restingHeartRate) defaultRec.restingHeartRate = googleFitVitals.restingHeartRate;
+        if (googleFitVitals.bloodPressure) {
+          defaultRec.systolicBP = googleFitVitals.bloodPressure.systolic;
+          defaultRec.diastolicBP = googleFitVitals.bloodPressure.diastolic;
+          defaultRec.bloodPressureCategory = googleFitVitals.bloodPressure.category;
+        }
+        if (googleFitVitals.spo2?.current) defaultRec.spo2 = googleFitVitals.spo2.current;
+        defaultRec.updatedAt = new Date().toISOString();
+        localStorage.setItem("beatahead-patient-record-demo-user-1", JSON.stringify(defaultRec));
+      } catch {}
+    }
+
+    window.dispatchEvent(new Event("beatahead-patient-record-updated"));
+    window.dispatchEvent(new Event("beatahead-gfit-synced"));
   }, [googleFitVitals]);
+
+  // ── Apply Vitals Preset (allows instant live demonstration of changing vitals -> ISI) ──
+  const updateVitalsPreset = useCallback((preset: "normal" | "elevated" | "recovery") => {
+    const now = Date.now();
+    let vitalsPreset: GoogleFitVitalsData;
+    let exerciseFreq: "active" | "moderate" | "light" = "moderate";
+
+    if (preset === "normal") {
+      vitalsPreset = {
+        currentHeartRate: 64,
+        restingHeartRate: 62,
+        minHeartRate: 54,
+        maxHeartRate: 98,
+        heartPoints: 160,
+        bloodPressure: {
+          systolic: 116,
+          diastolic: 74,
+          category: "normal",
+          lastRecorded: now,
+        },
+        spo2: {
+          current: 99,
+          average: 98.8,
+          lastRecorded: now,
+        },
+        recentHeartRate: [{ timestamp: now, bpm: 64, resting: true }],
+        recentBloodPressure: [{ timestamp: now, systolic: 116, diastolic: 74, category: "normal" }],
+        recentSpO2: [{ timestamp: now, percentage: 99 }],
+        source: "google_fit",
+        lastSynced: now,
+      };
+      exerciseFreq = "active";
+    } else if (preset === "elevated") {
+      vitalsPreset = {
+        currentHeartRate: 104,
+        restingHeartRate: 102,
+        minHeartRate: 88,
+        maxHeartRate: 142,
+        heartPoints: 15,
+        bloodPressure: {
+          systolic: 164,
+          diastolic: 102,
+          category: "high_stage_2",
+          lastRecorded: now,
+        },
+        spo2: {
+          current: 91,
+          average: 92.5,
+          lastRecorded: now,
+        },
+        recentHeartRate: [{ timestamp: now, bpm: 104, resting: false }],
+        recentBloodPressure: [{ timestamp: now, systolic: 164, diastolic: 102, category: "high_stage_2" }],
+        recentSpO2: [{ timestamp: now, percentage: 91 }],
+        source: "google_fit",
+        lastSynced: now,
+      };
+      exerciseFreq = "light";
+    } else {
+      // recovery
+      vitalsPreset = {
+        currentHeartRate: 74,
+        restingHeartRate: 72,
+        minHeartRate: 60,
+        maxHeartRate: 110,
+        heartPoints: 85,
+        bloodPressure: {
+          systolic: 124,
+          diastolic: 80,
+          category: "high_stage_1",
+          lastRecorded: now,
+        },
+        spo2: {
+          current: 97,
+          average: 97.2,
+          lastRecorded: now,
+        },
+        recentHeartRate: [{ timestamp: now, bpm: 74, resting: true }],
+        recentBloodPressure: [{ timestamp: now, systolic: 124, diastolic: 80, category: "high_stage_1" }],
+        recentSpO2: [{ timestamp: now, percentage: 97 }],
+        source: "google_fit",
+        lastSynced: now,
+      };
+      exerciseFreq = "moderate";
+    }
+
+    setGoogleFitVitals(vitalsPreset);
+    try {
+      localStorage.setItem(STORAGE_KEYS.VITALS_HISTORY, JSON.stringify(vitalsPreset));
+      localStorage.setItem(GFIT_SYNCED_KEY, String(now));
+    } catch {}
+    setGoogleFitLastSynced(now);
+
+    // Persist to Patient Record
+    if (typeof window !== "undefined") {
+      let recordFound = false;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("beatahead-patient-record")) {
+          try {
+            const currentRec = JSON.parse(localStorage.getItem(key) || "{}");
+            currentRec.restingHeartRate = vitalsPreset.restingHeartRate;
+            currentRec.systolicBP = vitalsPreset.bloodPressure.systolic;
+            currentRec.diastolicBP = vitalsPreset.bloodPressure.diastolic;
+            currentRec.bloodPressureCategory = vitalsPreset.bloodPressure.category;
+            currentRec.spo2 = vitalsPreset.spo2.current;
+            currentRec.exerciseFrequency = exerciseFreq;
+            currentRec.updatedAt = new Date().toISOString();
+            currentRec.vitalsHistory = upsertDailyVitalsEntry(currentRec.vitalsHistory, {
+              date: localDateKey(),
+              systolicBP: currentRec.systolicBP ?? null,
+              diastolicBP: currentRec.diastolicBP ?? null,
+              restingHeartRate: currentRec.restingHeartRate ?? null,
+              ecgValue: currentRec.ecgValue ?? "",
+              ppgValue: currentRec.ppgValue ?? "",
+              bloodPressureCategory: currentRec.bloodPressureCategory ?? "",
+            });
+            localStorage.setItem(key, JSON.stringify(currentRec));
+            recordFound = true;
+          } catch {}
+        }
+      }
+
+      if (!recordFound) {
+        try {
+          const defaultRec = createEmptyPatientRecord("demo-user-1");
+          defaultRec.restingHeartRate = vitalsPreset.restingHeartRate;
+          defaultRec.systolicBP = vitalsPreset.bloodPressure.systolic;
+          defaultRec.diastolicBP = vitalsPreset.bloodPressure.diastolic;
+          defaultRec.bloodPressureCategory = vitalsPreset.bloodPressure.category;
+          defaultRec.spo2 = vitalsPreset.spo2.current;
+          defaultRec.exerciseFrequency = exerciseFreq;
+          defaultRec.updatedAt = new Date().toISOString();
+          localStorage.setItem("beatahead-patient-record-demo-user-1", JSON.stringify(defaultRec));
+        } catch {}
+      }
+
+      window.dispatchEvent(new Event("beatahead-patient-record-updated"));
+      window.dispatchEvent(new Event("beatahead-gfit-synced"));
+    }
+  }, []);
 
   const value: FitRestContextValue = {
     fitnessProfile,
@@ -820,6 +982,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     importPhoneNutritionData,
     clearGoogleFitError,
     applyVitalsToHealthRecord,
+    updateVitalsPreset,
   };
 
   return (
