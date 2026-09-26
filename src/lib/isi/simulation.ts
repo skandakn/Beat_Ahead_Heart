@@ -77,16 +77,18 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
   const baseHR = customBaseline?.restingHR ?? 68;
   const baseHrv = customBaseline?.hrv ?? 50;
   const baseSpo2 = customBaseline?.spo2 ?? 97;
+  const basePpg = customBaseline?.pulseMorphology ?? 0.85;
+  const baseEcg = customBaseline?.ecgAmplitude ?? 0.80;
 
   switch (scenario) {
     case "normal":
       return {
-        ppg: 0.5 + Math.sin(t * 8) * 0.15 + noise(1),
-        ecg: 0.5 + Math.sin(t * 6) * 0.2 + noise(2),
-        spo2: baseSpo2 + Math.sin(t * 2) * 0.4 + noise(3, 0.1),
+        ppg: Math.max(0.1, (basePpg * 0.6) + Math.sin(t * 8) * 0.12 + noise(1)),
+        ecg: Math.max(0.1, (baseEcg * 0.6) + Math.sin(t * 6) * 0.15 + noise(2)),
+        spo2: Math.min(100, Math.max(70, baseSpo2 + Math.sin(t * 2) * 0.3 + noise(3, 0.08))),
         imu: 0.1 + Math.abs(Math.sin(t * 3)) * 0.15 + noise(4, 0.008),
-        heartRate: baseHR + Math.sin(t * 4) * 3 + noise(5, 0.2),
-        hrv: baseHrv + Math.sin(t * 3) * 4 + noise(6, 0.25),
+        heartRate: Math.max(35, baseHR + Math.sin(t * 4) * 3 + noise(5, 0.2)),
+        hrv: Math.max(10, baseHrv + Math.sin(t * 3) * 4 + noise(6, 0.25)),
         signalQuality: { ppg: 95, ecg: 90, spo2: 97, imu: 94, overall: 95 },
       };
 
@@ -98,12 +100,12 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
             ? (progress - 0.2) / 0.4
             : Math.max(0, 1 - (progress - 0.6) / 0.4);
       return {
-        ppg: 0.5 + stressFactor * 0.2 + Math.sin(t * 10) * 0.12 + noise(1),
-        ecg: 0.5 + stressFactor * 0.25 + Math.sin(t * 8) * 0.15 + noise(2),
-        spo2: 96 - stressFactor * 1.5 + noise(3),
+        ppg: Math.max(0.08, (basePpg * 0.5) + stressFactor * 0.2 + Math.sin(t * 10) * 0.12 + noise(1)),
+        ecg: Math.max(0.1, (baseEcg * 0.6) + stressFactor * 0.3 + Math.sin(t * 8) * 0.15 + noise(2)),
+        spo2: Math.max(70, baseSpo2 - stressFactor * 2.5 + noise(3)),
         imu: 0.2 + stressFactor * 0.3 + noise(4, 0.016),
-        heartRate: 68 + stressFactor * 18 + Math.sin(t * 6) * 3 + noise(5, 0.16),
-        hrv: 48 - stressFactor * 12 + noise(6, 0.24),
+        heartRate: Math.max(35, baseHR + stressFactor * 22 + Math.sin(t * 6) * 3 + noise(5, 0.16)),
+        hrv: Math.max(8, baseHrv - stressFactor * 14 + noise(6, 0.24)),
         signalQuality: {
           ppg: 92 - stressFactor * 5,
           ecg: 85 - stressFactor * 8,
@@ -117,12 +119,12 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
     case "recovering": {
       const recoveryFactor = Math.max(0, 1 - progress * 1.5);
       return {
-        ppg: 0.55 + recoveryFactor * 0.1 + Math.sin(t * 8) * 0.1 + noise(1),
-        ecg: 0.55 + recoveryFactor * 0.12 + Math.sin(t * 6) * 0.12 + noise(2),
-        spo2: 95.5 + (1 - recoveryFactor) * 0.8 + noise(3),
+        ppg: Math.max(0.1, (basePpg * 0.55) + recoveryFactor * 0.1 + Math.sin(t * 8) * 0.1 + noise(1)),
+        ecg: Math.max(0.1, (baseEcg * 0.55) + recoveryFactor * 0.12 + Math.sin(t * 6) * 0.12 + noise(2)),
+        spo2: Math.min(100, Math.max(70, (baseSpo2 - 1.5) + (1 - recoveryFactor) * 1.2 + noise(3))),
         imu: 0.15 + recoveryFactor * 0.2 + noise(4, 0.008),
-        heartRate: 72 + recoveryFactor * 10 + noise(5, 0.16),
-        hrv: 42 + recoveryFactor * 8 + noise(6, 0.24),
+        heartRate: Math.max(35, baseHR + recoveryFactor * 12 + noise(5, 0.16)),
+        hrv: Math.max(10, baseHrv - 6 + recoveryFactor * 8 + noise(6, 0.24)),
         signalQuality: {
           ppg: 90 + (1 - recoveryFactor) * 4,
           ecg: 82 + (1 - recoveryFactor) * 6,
@@ -136,12 +138,12 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
     case "persistent_rising": {
       const riseFactor = progress * 0.8;
       return {
-        ppg: 0.5 + riseFactor * 0.15 + Math.sin(t * 8) * 0.1 + noise(1),
-        ecg: 0.5 + riseFactor * 0.18 + Math.sin(t * 6) * 0.12 + noise(2),
-        spo2: 97 - riseFactor * 2 + noise(3),
+        ppg: Math.max(0.08, (basePpg * 0.5) + riseFactor * 0.15 + Math.sin(t * 8) * 0.1 + noise(1)),
+        ecg: Math.max(0.1, (baseEcg * 0.6) + riseFactor * 0.22 + Math.sin(t * 6) * 0.12 + noise(2)),
+        spo2: Math.max(70, baseSpo2 - riseFactor * 3 + noise(3)),
         imu: 0.12 + riseFactor * 0.1 + noise(4, 0.0064),
-        heartRate: 68 + riseFactor * 15 + noise(5, 0.16),
-        hrv: 50 - riseFactor * 10 + noise(6, 0.16),
+        heartRate: Math.max(35, baseHR + riseFactor * 18 + noise(5, 0.16)),
+        hrv: Math.max(8, baseHrv - riseFactor * 12 + noise(6, 0.16)),
         signalQuality: {
           ppg: 93 - riseFactor * 3,
           ecg: 87 - riseFactor * 5,
@@ -157,10 +159,10 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
       return {
         ppg: 0.5 + motionBurst * 0.3 + noise(1, 0.024),
         ecg: 0.5 + motionBurst * 0.25 + noise(2, 0.02),
-        spo2: 96 + noise(3, 0.16),
+        spo2: baseSpo2 + noise(3, 0.16),
         imu: motionBurst + noise(4, 0.024),
-        heartRate: 70 + motionBurst * 12 + noise(5, 0.4),
-        hrv: 45 - motionBurst * 8 + noise(6, 0.4),
+        heartRate: baseHR + motionBurst * 12 + noise(5, 0.4),
+        hrv: Math.max(8, baseHrv - motionBurst * 8 + noise(6, 0.4)),
         signalQuality: {
           ppg: 95 - motionBurst * 40,
           ecg: 90 - motionBurst * 35,
@@ -172,7 +174,7 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
     }
 
     default:
-      return getScenarioParams("normal", t);
+      return getScenarioParams("normal", t, customBaseline);
   }
 }
 

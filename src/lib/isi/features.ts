@@ -1,4 +1,4 @@
-import type { DemoScenario, FeatureSet, PhysiologicalSample, TrendDirection } from "./types";
+import type { DemoScenario, FeatureSet, PersonalBaseline, PhysiologicalSample, TrendDirection } from "./types";
 import { DEFAULT_BASELINE } from "./baseline";
 
 function getTrend(current: number, previous: number, threshold: number = 0.02): TrendDirection {
@@ -11,9 +11,10 @@ function getTrend(current: number, previous: number, threshold: number = 0.02): 
 export function extractFeatures(
   sample: PhysiologicalSample,
   previousSample: PhysiologicalSample | null,
-  scenario: DemoScenario
+  scenario: DemoScenario,
+  customBaseline?: PersonalBaseline
 ): FeatureSet {
-  const baseline = DEFAULT_BASELINE;
+  const baseline = customBaseline ?? DEFAULT_BASELINE;
   const prevHrv = previousSample?.hrv ?? baseline.hrv;
 
   const hrvDeviation = ((sample.hrv - baseline.hrv) / baseline.hrv) * 100;
