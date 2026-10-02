@@ -2,9 +2,11 @@
 
 import { useSubscription } from "@/lib/subscription/SubscriptionContext";
 import { FlaskConical, X, Sparkles } from "lucide-react";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 export function DemoBanner() {
   const { demoMode, setDemoMode } = useSubscription();
+  const { t } = useI18n();
 
   if (!demoMode) return null;
 
@@ -16,10 +18,10 @@ export function DemoBanner() {
             <FlaskConical className="w-3.5 h-3.5" />
           </span>
           <span className="font-bold tracking-wide uppercase text-white">
-            DEMO MODE — PRO FEATURES UNLOCKED
+            {t("demo.banner.title")}
           </span>
           <span className="hidden md:inline-block text-amber-100 text-xs border-l border-amber-400/60 pl-2 ml-1">
-            Presentation Mode · No Payment Recorded · Prototype Evaluation
+            {t("demo.banner.subtitle")}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -27,7 +29,7 @@ export function DemoBanner() {
             onClick={() => setDemoMode(false)}
             className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-md text-xs font-semibold text-white transition-colors"
           >
-            <span>Exit Demo Mode</span>
+            <span>{t("demo.banner.exit")}</span>
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

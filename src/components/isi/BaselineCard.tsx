@@ -7,6 +7,7 @@ import { cn, formatDeviation } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingDown, TrendingUp, Minus, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 interface BaselineCardProps {
   sample?: PhysiologicalSample;
@@ -23,6 +24,7 @@ export function BaselineCard({
 }: BaselineCardProps = {}) {
   const sim = useSimulation();
   const { canAccessFeature, subscribeToPro, setDemoMode } = useSubscription();
+  const { t } = useI18n();
 
   const currentSample = sampleProp ?? sim.currentSample;
   const baseline = baselineProp ?? sim.baseline;
@@ -32,25 +34,25 @@ export function BaselineCard({
 
   const metrics = [
     {
-      label: "Resting HR",
+      label: t("baseline.restingHR"),
       current: Math.round(currentSample.heartRate),
       baseline: baseline.restingHR,
       unit: "bpm",
     },
     {
-      label: "HRV (SDNN)",
+      label: t("baseline.hrv"),
       current: Math.round(currentSample.hrv),
       baseline: baseline.hrv,
       unit: "ms",
     },
     {
-      label: "SpO₂",
+      label: t("baseline.spo2"),
       current: currentSample.spo2.toFixed(1),
       baseline: baseline.spo2,
       unit: "%",
     },
     {
-      label: "Pulse Morphology",
+      label: t("baseline.pulseMorphology"),
       current: features.pulseMorphology.amplitude.toFixed(2),
       baseline: baseline.pulseMorphology,
       unit: "",
@@ -64,12 +66,12 @@ export function BaselineCard({
           <CardTitle className="text-base">{title}</CardTitle>
           {!hasAccess && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
-              <Lock className="w-3 h-3" /> Pro Feature
+              <Lock className="w-3 h-3" /> {t("baseline.proFeature")}
             </span>
           )}
         </div>
         <p className="text-xs text-navy-500 mt-1">
-          ISI is normalized against your rolling baseline rather than population-wide norms.
+          {t("baseline.normalized")}
         </p>
       </CardHeader>
       <CardContent>
@@ -82,7 +84,7 @@ export function BaselineCard({
                 <div>
                   <p className="text-sm font-medium text-navy-900">{m.label}</p>
                   <p className="text-xs text-navy-400">
-                    Baseline: {m.baseline}{m.unit}
+                    {t("baseline.baseline")}: {m.baseline}{m.unit}
                   </p>
                 </div>
                 <div className="text-right">
@@ -105,22 +107,22 @@ export function BaselineCard({
               <div className="inline-flex p-2 rounded-full bg-red-50 text-cardiac">
                 <Lock className="w-4 h-4" />
               </div>
-              <h4 className="font-bold text-sm text-navy-900">Personal Baseline Analytics</h4>
+              <h4 className="font-bold text-sm text-navy-900">{t("baseline.personalAnalytics")}</h4>
               <p className="text-xs text-navy-500">
-                Unlock rolling individual baselines with BeatAhead Pro (₹599/mo).
+                {t("baseline.unlockBaselines")}
               </p>
               <div className="pt-1 flex flex-col gap-1.5">
                 <button
                   onClick={subscribeToPro}
                   className="w-full text-xs font-semibold py-1.5 px-3 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors flex items-center justify-center gap-1"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Subscribe for ₹599/mo
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> {t("baseline.subscribe599")}
                 </button>
                 <button
                   onClick={() => setDemoMode(true)}
                   className="text-[11px] text-amber-700 hover:text-amber-900 font-medium underline"
                 >
-                  Enable Demo Mode →
+                  {t("baseline.enableDemo")}
                 </button>
               </div>
             </div>

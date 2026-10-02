@@ -59,7 +59,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-amber-950">Judge Demo Mode</h3>
+                <h3 className="text-sm font-bold text-amber-950">{t("demo.judgeModeTitle")}</h3>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -76,10 +76,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </p>
             {demoMode ? (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-600 text-white text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5" /> DEMO MODE ACTIVE
+                <Sparkles className="w-3.5 h-3.5" /> {t("demo.judgeModeActive")}
               </div>
             ) : (
-              <span className="text-xs text-navy-500">Demo mode is off. Access controlled by active subscription.</span>
+              <span className="text-xs text-navy-500">{t("demo.judgeModeOff")}</span>
             )}
           </section>
 

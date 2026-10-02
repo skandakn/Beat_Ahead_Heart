@@ -7,6 +7,7 @@ import { getContributionInfluence } from "@/lib/isi/features";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Lock, Sparkles, Cpu } from "lucide-react";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 interface ContributionBarsProps {
   contributions?: ISIContributions;
@@ -15,16 +16,17 @@ interface ContributionBarsProps {
 export function ContributionBars({ contributions: contributionsProp }: ContributionBarsProps = {}) {
   const { currentScore } = useSimulation();
   const { canAccessFeature, subscribeToPro, setDemoMode } = useSubscription();
+  const { t } = useI18n();
 
   const contributions = contributionsProp ?? currentScore.contributions;
   const hasAccess = canAccessFeature("FEATURE_CONTRIBUTIONS");
 
   const items = [
-    { label: "Model Evidence (E_model)", value: contributions.modelEvidence ?? 0.05, key: "modelEvidence" as const },
-    { label: "Autonomic Strain (D_auto)", value: contributions.autonomic ?? 0.10, key: "autonomic" as const },
-    { label: "Vascular Perfusion (D_perf)", value: contributions.perfusion ?? 0.08, key: "perfusion" as const },
-    { label: "HRV (SDNN Deviation)", value: contributions.hrv, key: "hrv" as const },
-    { label: "Motion / Artifact", value: contributions.motionArtifact, key: "motionArtifact" as const },
+    { label: t("contribution.modelEvidence"), value: contributions.modelEvidence ?? 0.05, key: "modelEvidence" as const },
+    { label: t("contribution.autonomic"), value: contributions.autonomic ?? 0.10, key: "autonomic" as const },
+    { label: t("contribution.perfusion"), value: contributions.perfusion ?? 0.08, key: "perfusion" as const },
+    { label: t("contribution.hrv"), value: contributions.hrv, key: "hrv" as const },
+    { label: t("contribution.motionArtifact"), value: contributions.motionArtifact, key: "motionArtifact" as const },
   ];
 
   return (
@@ -33,15 +35,15 @@ export function ContributionBars({ contributions: contributionsProp }: Contribut
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Cpu className="w-4 h-4 text-indigo-600" />
-            Why did the ISI change?
+            {t("contribution.title")}
           </CardTitle>
           {!hasAccess && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
-              <Lock className="w-3 h-3" /> Pro Feature
+              <Lock className="w-3 h-3" /> {t("contribution.proFeature")}
             </span>
           )}
         </div>
-        <p className="text-xs text-navy-500">Multi-source physiological component contribution breakdown</p>
+        <p className="text-xs text-navy-500">{t("contribution.subtitle")}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className={cn("space-y-4", !hasAccess && "filter blur-xs opacity-40 pointer-events-none select-none")}>
@@ -55,7 +57,7 @@ export function ContributionBars({ contributions: contributionsProp }: Contribut
             </div>
           ))}
           <p className="text-[10px] text-navy-400 pt-2 border-t border-navy-100">
-            Prototype multi-source engineering contributions — not clinically validated diagnostic weights.
+            {t("contribution.disclaimer")}
           </p>
         </div>
 
@@ -65,22 +67,22 @@ export function ContributionBars({ contributions: contributionsProp }: Contribut
               <div className="inline-flex p-2 rounded-full bg-red-50 text-cardiac">
                 <Lock className="w-4 h-4" />
               </div>
-              <h4 className="font-bold text-sm text-navy-900">Feature Contribution Analysis</h4>
+              <h4 className="font-bold text-sm text-navy-900">{t("contribution.featureAnalysis")}</h4>
               <p className="text-xs text-navy-500">
-                Unlock explainable feature weights with BeatAhead Pro (₹1599/mo).
+                {t("contribution.unlockWeights")}
               </p>
               <div className="pt-1 flex flex-col gap-1.5">
                 <button
                   onClick={subscribeToPro}
                   className="w-full text-xs font-semibold py-1.5 px-3 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors flex items-center justify-center gap-1"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Subscribe for ₹1599/mo
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> {t("contribution.subscribe1599")}
                 </button>
                 <button
                   onClick={() => setDemoMode(true)}
                   className="text-[11px] text-amber-700 hover:text-amber-900 font-medium underline"
                 >
-                  Enable Demo Mode →
+                  {t("contribution.enableDemo")}
                 </button>
               </div>
             </div>

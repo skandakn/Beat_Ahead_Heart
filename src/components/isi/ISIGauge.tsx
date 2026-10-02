@@ -5,6 +5,7 @@ import { cn, getISILabel } from "@/lib/utils";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MEDICAL_DISCLAIMER } from "@/lib/isi/types";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 interface ISIGaugeProps {
   score?: number;
@@ -22,6 +23,8 @@ export function ISIGauge({
   size = "lg",
 }: ISIGaugeProps) {
   const { currentScore } = useSimulation();
+  const { t } = useI18n();
+  
   const score = propScore ?? currentScore?.score ?? 0;
   const baseline = propBaseline ?? currentScore?.baseline ?? 40;
   const trend = propTrend ?? currentScore?.trend ?? "stable";
@@ -72,26 +75,26 @@ export function ISIGauge({
       <p className="mt-2 text-sm font-semibold text-navy-800">{getISILabel(score)}</p>
       
       <span className="mt-1 text-[11px] font-medium text-navy-500 bg-navy-50 px-2 py-0.5 rounded-full border border-navy-100">
-        Status: {productState}
+        {t("isi.gauge.status")}: {productState}
       </span>
 
       <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs w-full">
         <div>
-          <span className="text-navy-400">Personal baseline</span>
+          <span className="text-navy-400">{t("isi.gauge.personalBaseline")}</span>
           <p className="font-semibold text-navy-900">{baseline}</p>
         </div>
         <div>
-          <span className="text-navy-400">Current deviation</span>
+          <span className="text-navy-400">{t("isi.gauge.currentDeviation")}</span>
           <p className={cn("font-semibold", deviation > 0 ? "text-cardiac" : "text-emerald-600")}>
             {deviation > 0 ? "+" : ""}{deviation}
           </p>
         </div>
         <div>
-          <span className="text-navy-400">Trend</span>
+          <span className="text-navy-400">{t("isi.gauge.trend")}</span>
           <p className="font-semibold text-navy-900 capitalize">{trendIcon} {trend}</p>
         </div>
         <div>
-          <span className="text-navy-400">Confidence</span>
+          <span className="text-navy-400">{t("isi.gauge.confidence")}</span>
           <p className="font-semibold text-navy-900">{confidence}%</p>
         </div>
       </div>
@@ -100,7 +103,7 @@ export function ISIGauge({
         <Tooltip>
           <TooltipTrigger className="mt-2.5 flex items-center gap-1 text-[11px] text-navy-400 hover:text-navy-600">
             <Info className="w-3 h-3" />
-            About ISI Scoring Architecture
+            {t("isi.gauge.aboutArchitecture")}
           </TooltipTrigger>
           <TooltipContent className="max-w-xs">
             <p className="text-xs">{MEDICAL_DISCLAIMER}</p>
@@ -109,7 +112,7 @@ export function ISIGauge({
       </TooltipProvider>
 
       <p className="mt-1 text-[10px] text-navy-400 text-center max-w-xs">
-        Prototype research composite index — not a clinically validated risk score.
+        {t("isi.gauge.prototypeDisclaimer")}
       </p>
     </div>
   );
