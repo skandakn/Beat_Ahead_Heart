@@ -34,7 +34,7 @@ export function calculateDistanceKm(
  * Formats distance into a human-readable string (meters or kilometers).
  */
 export function formatDistance(distanceKm: number): string {
-  if (isNaN(distanceKm) || distanceKm < 0) return 'Nearby';
+  if (isNaN(distanceKm) || distanceKm <= 0) return 'Nearby';
   if (distanceKm < 1) {
     const meters = Math.round(distanceKm * 1000);
     return `${meters} m`;

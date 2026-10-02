@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test tests/**/*.test.ts src/**/*.test.ts",
     "voice-server": "node --import tsx/esm src/server/voice-service.ts"
   },
   "dependencies": {
