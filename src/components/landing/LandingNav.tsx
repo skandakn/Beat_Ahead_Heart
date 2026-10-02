@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { EmergencyButton } from "@/components/emergency/EmergencyButton";
 
 export function LandingNav() {
   const [open, setOpen] = useState(false);
@@ -36,6 +37,7 @@ export function LandingNav() {
               {link.label}
             </Link>
           ))}
+          <EmergencyButton variant="nav" />
           <LanguageSelector compact className="border-l border-navy-200 ps-3" />
 
           {isSignedIn ? (
@@ -84,7 +86,10 @@ export function LandingNav() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 space-y-1">
+            <div className="p-4 space-y-2">
+              <div className="pb-1">
+                <EmergencyButton variant="sidebar" className="p-0" />
+              </div>
               <div className="px-3 py-2.5">
                 <LanguageSelector />
               </div>

@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { LanguageSelector } from "./LanguageSelector";
+import { EmergencyButton } from "@/components/emergency/EmergencyButton";
 
 function useIsOnboarding(pathname: string): boolean {
   const [isOnboarding, setIsOnboarding] = useState(false);
@@ -149,6 +150,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 space-y-3 border-t border-navy-100">
+        <EmergencyButton variant="sidebar" className="p-0" />
         <SystemStatusPanel compact />
         <SidebarSignOutButton />
         <div className="flex items-center justify-between px-1 pt-1">
@@ -231,11 +233,14 @@ export function MobileNav() {
             className="absolute right-0 top-0 bottom-0 w-72 bg-white shadow-elevated p-4 overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-navy-900">{t("common.menu")}</h2>
               <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-navy-50" aria-label={t("common.closeMenu")}>
                 <X className="w-5 h-5" />
               </button>
+            </div>
+            <div className="mb-4">
+              <EmergencyButton variant="sidebar" className="p-0" />
             </div>
             <nav className="space-y-1">
               {navItems.map((item) => {
@@ -291,6 +296,7 @@ export function AppHeader() {
     "/rest": t("nav.restAgent"),
     "/vital-agent": t("nav.vitalAgent"),
     "/clinician": t("header.clinicianDashboard"),
+    "/emergency": t("header.emergency"),
     "/pricing": t("header.pricingPlans"),
     "/methodology": t("nav.methodology"),
     "/about": t("header.aboutBeatAhead"),
@@ -307,6 +313,7 @@ export function AppHeader() {
           {titles[pathname] || "BeatAhead"}
         </h2>
         <div className="flex items-center gap-2 sm:gap-3">
+          <EmergencyButton variant="header" />
           <LanguageSelector compact className="border-r border-navy-200 pe-2" />
           <SettingsButton />
 
