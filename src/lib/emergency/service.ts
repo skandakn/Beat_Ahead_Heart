@@ -8,12 +8,12 @@ export const EMERGENCY_SERVICES_TEL = 'tel:112';
 export const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
 export const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 
-// Overpass API mirrors for high availability and failover
+// Overpass API mirrors for high availability and failover (fastest/most reliable first)
 const OVERPASS_MIRRORS = [
-  'https://lz4.overpass-api.de/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
   'https://z.overpass-api.de/api/interpreter',
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
 ];
 
 // In-memory cache to respect Overpass usage policies (10-minute TTL)
@@ -442,25 +442,23 @@ export async function queryOverpassNearby(
     return cached.places;
   }
 
-  // Calculate bounding box for the spatial index
-  const safeRadius = Math.min(Math.max(radiusKm, 1), 25);
-  const dLat = safeRadius / 111.0;
-  const dLon = safeRadius / (111.0 * Math.cos((latitude * Math.PI) / 180));
-
-  const south = (latitude - dLat).toFixed(4);
-  const north = (latitude + dLat).toFixed(4);
-  const west = (longitude - dLon).toFixed(4);
-  const east = (longitude + dLon).toFixed(4);
+  // Calculate radius in meters (capped at 8km to guarantee fast Overpass execution <3s)
+  const safeRadiusKm = Math.min(Math.max(radiusKm, 1), 25);
+  const radiusMeters = Math.round(Math.min(safeRadiusKm * 1000, 8000));
 
   // Overpass QL query: searches for hospitals, clinics, doctors, pharmacies
-  const query = `[out:json][timeout:15];
+  // Uses indexed tags and fast radial indexing for high-traffic public mirrors
+  const query = `[out:json][timeout:10];
 (
-  node["amenity"~"hospital|clinic|doctors|pharmacy"](${south},${west},${north},${east});
-  way["amenity"~"hospital|clinic|doctors|pharmacy"](${south},${west},${north},${east});
-  node["healthcare"~"hospital|clinic|doctor|pharmacy"](${south},${west},${north},${east});
-  way["healthcare"~"hospital|clinic|doctor|pharmacy"](${south},${west},${north},${east});
+  node["amenity"="hospital"](around:${radiusMeters},${latitude},${longitude});
+  node["amenity"="clinic"](around:${radiusMeters},${latitude},${longitude});
+  node["amenity"="doctors"](around:${radiusMeters},${latitude},${longitude});
+  node["amenity"="pharmacy"](around:${radiusMeters},${latitude},${longitude});
+  way["amenity"="hospital"](around:${radiusMeters},${latitude},${longitude});
+  way["amenity"="clinic"](around:${radiusMeters},${latitude},${longitude});
+  way["amenity"="pharmacy"](around:${radiusMeters},${latitude},${longitude});
 );
-out center tags 60;`;
+out center tags 50;`;
 
   let lastError: Error | null = null;
 
@@ -472,10 +470,10 @@ out center tags 60;`;
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent':
             'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beat-ahead.vercel.app; skanda.kn@gmail.com)',
-          Referer: 'https://beat-ahead.vercel.app/emergency',
+          Accept: 'application/json',
         },
         body: 'data=' + encodeURIComponent(query),
-        signal: AbortSignal.timeout(8000), // 8-second failover timeout
+        signal: AbortSignal.timeout(6000), // 6-second failover timeout
       });
 
       if (!response.ok) {
@@ -491,7 +489,7 @@ out center tags 60;`;
         if (place) {
           // Verify element is within radius
           const distKm = place.distanceMeters / 1000;
-          if (distKm <= safeRadius * 1.2) {
+          if (distKm <= safeRadiusKm * 1.2) {
             normalized.push(place);
           }
         }
@@ -548,13 +546,11 @@ export async function queryOverpassByText(
     } catch {}
   }
 
-  // Name regex search on Overpass
-  const query = `[out:json][timeout:15];
+  // Name search on Overpass
+  const query = `[out:json][timeout:10];
 (
   node["amenity"~"hospital|clinic|doctors|pharmacy"]["name"~"${sanitized}",i];
   way["amenity"~"hospital|clinic|doctors|pharmacy"]["name"~"${sanitized}",i];
-  node["healthcare"~"hospital|clinic|doctor|pharmacy"]["name"~"${sanitized}",i];
-  way["healthcare"~"hospital|clinic|doctor|pharmacy"]["name"~"${sanitized}",i];
 );
 out center tags 30;`;
 
@@ -568,10 +564,10 @@ out center tags 30;`;
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent':
             'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beat-ahead.vercel.app; skanda.kn@gmail.com)',
-          Referer: 'https://beat-ahead.vercel.app/emergency',
+          Accept: 'application/json',
         },
         body: 'data=' + encodeURIComponent(query),
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(6000),
       });
 
       if (!response.ok) {

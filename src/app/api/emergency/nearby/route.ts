@@ -7,6 +7,7 @@ import {
 import { EmergencyNearbyResponse } from '@/lib/emergency/types';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 45;
 
 export async function POST(req: NextRequest) {
   try {
