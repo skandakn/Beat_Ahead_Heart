@@ -301,7 +301,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
                 🚨 Immediate Action
               </span>
               <h2 className="text-lg sm:text-2xl font-black tracking-tight leading-tight">
-                CALL EMERGENCY SERVICES (112)
+                CALL EMERGENCY SERVICES — 112
               </h2>
               <p className="text-xs sm:text-sm text-red-100 font-medium mt-0.5">
                 National Emergency Number • Medical, Ambulance & Police
@@ -528,15 +528,15 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
               <HeartPulse className="h-6 w-6 animate-spin" />
             </div>
             <p className="text-sm font-bold text-navy-900">
-              {isLocating ? "Acquiring your GPS location..." : "Searching nearby hospitals & emergency facilities..."}
+              {isLocating ? "Acquiring your GPS location..." : "Searching nearby healthcare facilities within ~10 km..."}
             </p>
             <p className="text-xs text-navy-500 mt-1">
-              Querying Google Places API for real-time healthcare providers
+              Querying OpenStreetMap Overpass API for real-time healthcare providers
             </p>
           </div>
         )}
 
-        {/* API Error Graceful Fallback (Item 9) */}
+        {/* API Error Graceful Fallback (Item 9 & 17) */}
         {!isLoadingPlaces && apiError && (
           <div
             className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-navy-900 shadow-card"
@@ -546,7 +546,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
               <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-sm font-bold text-rose-900">
-                  Healthcare Directory Service Notice
+                  OpenStreetMap Healthcare Directory Notice
                 </h4>
                 <p className="text-xs text-rose-700 mt-1 leading-relaxed">
                   {apiError}
@@ -610,6 +610,22 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
           filteredPlaces.map((place) => (
             <HealthcarePlaceCard key={place.id} place={place} />
           ))}
+
+        {/* OpenStreetMap Attribution (Item 14) */}
+        <div className="pt-4 border-t border-navy-100 flex items-center justify-between text-[11px] text-navy-500">
+          <span>
+            Healthcare POI data courtesy of{" "}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-navy-700 hover:text-navy-900 underline font-semibold"
+            >
+              © OpenStreetMap contributors
+            </a>
+          </span>
+          <span>Search radius ~10 km</span>
+        </div>
       </div>
     </div>
   );

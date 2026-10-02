@@ -286,10 +286,8 @@ describe('Emergency Assistance Feature Test Suite', () => {
       const normalized = normalizeGooglePlace(rawPlaceNoPhone, userLat, userLng);
       assert.strictEqual(normalized.phoneNumber, null);
 
-      // Verify sanitized tel is null so call button is safely disabled
-      const sanitizedTel = normalized.phoneNumber
-        ? normalized.phoneNumber.replace(/[^\d+]/g, '')
-        : null;
+      const rawPhone: any = normalized.phoneNumber;
+      const sanitizedTel = rawPhone ? rawPhone.replace(/[^\d+]/g, '') : null;
       assert.strictEqual(sanitizedTel, null);
     });
   });

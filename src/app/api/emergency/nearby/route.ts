@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  queryGooglePlacesNearby,
-  queryGooglePlacesByText,
+  queryOverpassNearby,
+  queryOverpassByText,
+  OSM_ATTRIBUTION,
 } from '@/lib/emergency/service';
 import { EmergencyNearbyResponse } from '@/lib/emergency/types';
 
@@ -12,42 +13,24 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const { latitude, longitude, radiusMeters, query } = body;
 
-    const apiKey =
-      process.env.GOOGLE_PLACES_API_KEY ||
-      process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json<EmergencyNearbyResponse>(
-        {
-          success: false,
-          places: [],
-          totalResults: 0,
-          error:
-            'Google Places API key is not configured on the server. Use the direct Call Emergency Services (112) option.',
-        },
-        { status: 503 }
-      );
-    }
-
-    // 1. Text-based manual search (City/locality)
+    // 1. Text-based manual search (hospital name, locality or city)
     if (query && typeof query === 'string' && query.trim().length > 0) {
-      const places = await queryGooglePlacesByText(
+      const places = await queryOverpassByText(
         query.trim(),
         typeof latitude === 'number' ? latitude : undefined,
-        typeof longitude === 'number' ? longitude : undefined,
-        apiKey
+        typeof longitude === 'number' ? longitude : undefined
       );
 
       return NextResponse.json<EmergencyNearbyResponse>({
         success: true,
         places,
         totalResults: places.length,
-        source: 'google_places',
+        source: 'openstreetmap',
+        attribution: OSM_ATTRIBUTION,
       });
     }
 
-    // 2. Geolocation coordinate-based search
+    // 2. Geolocation coordinates search
     if (
       typeof latitude !== 'number' ||
       typeof longitude !== 'number' ||
@@ -69,29 +52,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const radius =
+    // Radius in km (default 10 km as requested)
+    const radiusKm =
       typeof radiusMeters === 'number' && radiusMeters > 0
-        ? radiusMeters
-        : 10000; // default 10km
+        ? radiusMeters / 1000
+        : 10;
 
-    const places = await queryGooglePlacesNearby(latitude, longitude, radius, apiKey);
+    const places = await queryOverpassNearby(latitude, longitude, radiusKm);
 
     return NextResponse.json<EmergencyNearbyResponse>({
       success: true,
       places,
       totalResults: places.length,
-      source: 'google_places',
+      source: 'openstreetmap',
+      attribution: OSM_ATTRIBUTION,
     });
   } catch (err: any) {
-    console.error('[Emergency API Error]:', err?.message || err);
+    console.error('[Emergency Overpass API Error]:', err?.message || err);
     return NextResponse.json<EmergencyNearbyResponse>(
       {
         success: false,
         places: [],
         totalResults: 0,
         error:
-          err?.message ||
-          'Failed to retrieve nearby healthcare facilities. Please call 112 directly.',
+          'OpenStreetMap Overpass service is momentarily busy. In an emergency, dial 112 directly.',
       },
       { status: 502 }
     );
@@ -106,40 +90,22 @@ export async function GET(req: NextRequest) {
     const radiusStr = searchParams.get('radius') || searchParams.get('radiusMeters');
     const query = searchParams.get('q') || searchParams.get('query');
 
-    const apiKey =
-      process.env.GOOGLE_PLACES_API_KEY ||
-      process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json<EmergencyNearbyResponse>(
-        {
-          success: false,
-          places: [],
-          totalResults: 0,
-          error:
-            'Google Places API key is not configured on the server. Please call 112 directly.',
-        },
-        { status: 503 }
-      );
-    }
-
     const latitude = latStr ? parseFloat(latStr) : undefined;
     const longitude = lngStr ? parseFloat(lngStr) : undefined;
-    const radiusMeters = radiusStr ? parseFloat(radiusStr) : 10000;
+    const radiusKm = radiusStr ? parseFloat(radiusStr) / 1000 : 10;
 
     if (query && query.trim()) {
-      const places = await queryGooglePlacesByText(
+      const places = await queryOverpassByText(
         query.trim(),
         latitude,
-        longitude,
-        apiKey
+        longitude
       );
       return NextResponse.json<EmergencyNearbyResponse>({
         success: true,
         places,
         totalResults: places.length,
-        source: 'google_places',
+        source: 'openstreetmap',
+        attribution: OSM_ATTRIBUTION,
       });
     }
 
@@ -160,22 +126,23 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const places = await queryGooglePlacesNearby(latitude, longitude, radiusMeters, apiKey);
+    const places = await queryOverpassNearby(latitude, longitude, radiusKm);
 
     return NextResponse.json<EmergencyNearbyResponse>({
       success: true,
       places,
       totalResults: places.length,
-      source: 'google_places',
+      source: 'openstreetmap',
+      attribution: OSM_ATTRIBUTION,
     });
   } catch (err: any) {
-    console.error('[Emergency API GET Error]:', err?.message || err);
+    console.error('[Emergency Overpass API GET Error]:', err?.message || err);
     return NextResponse.json<EmergencyNearbyResponse>(
       {
         success: false,
         places: [],
         totalResults: 0,
-        error: err?.message || 'Failed to retrieve nearby healthcare facilities.',
+        error: 'OpenStreetMap Overpass service is unavailable. Please dial 112 directly.',
       },
       { status: 502 }
     );
