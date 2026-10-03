@@ -278,16 +278,6 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         </div>
       )}
 
-      {/* ─── Medical Safety Disclaimer (Item 11) ─── */}
-      <div className="mb-6 rounded-xl bg-amber-50 border border-amber-200 p-3 sm:p-4 text-xs text-amber-900 flex items-start gap-3 shadow-sm">
-        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong className="font-semibold">Medical Safety Notice: </strong>
-          BeatAhead does not diagnose medical emergencies. If you believe you are experiencing a medical emergency,
-          contact emergency services or seek immediate medical care.
-        </p>
-      </div>
-
       {/* ─── PRIMARY ACTION 1: CALL EMERGENCY SERVICES (112) (Item 7 & 12) ─── */}
       <div className="mb-6">
         <a
