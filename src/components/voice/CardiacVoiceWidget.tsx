@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import {
   PhoneCall,
   PhoneOff,
@@ -33,6 +34,7 @@ interface SymptomState {
 }
 
 export function CardiacVoiceWidget() {
+  const { t } = useI18n();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -782,7 +784,7 @@ export function CardiacVoiceWidget() {
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600/10 border border-red-500/20 text-red-400 mb-3 shadow-inner">
                   <PhoneCall className="h-8 w-8 animate-pulse" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Emergency Cardiac AI Helpline</h3>
+                <h3 className="text-sm font-semibold text-white">{t("agent.emergencyCardiacAIHelpline")}</h3>
                 <p className="mt-1 text-xs text-slate-400 leading-relaxed max-w-[260px]">
                   Immediate vocal triage for acute chest discomfort, radiating pain, breathlessness, or elevated Ischemic Stress Index (ISI).
                 </p>

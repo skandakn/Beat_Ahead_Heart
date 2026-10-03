@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import {
   Send,
   Bot,
@@ -99,6 +100,7 @@ const INITIAL_FITNESS_MESSAGE: FitnessMessage = {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function FitnessAIChat() {
+  const { t } = useI18n();
   const { fitnessProfile, recoveryState, workoutHistory } = useFitRest();
 
   const [messages, setMessages] = useState<FitnessMessage[]>([INITIAL_FITNESS_MESSAGE]);
@@ -217,7 +219,7 @@ export function FitnessAIChat() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Dumbbell className="h-4 w-4 text-blue-600" />
-            <CardTitle className="text-sm">AI Fitness Coach</CardTitle>
+            <CardTitle className="text-sm">{t("agent.aiFitnessCoach")}</CardTitle>
           </div>
           {messages.length > 0 && (
             <button

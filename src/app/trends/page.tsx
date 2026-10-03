@@ -7,6 +7,7 @@ import { Paywall } from "@/components/ui/Paywall";
 import { generateTrendData } from "@/lib/isi/simulation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 import {
   ResponsiveContainer,
@@ -28,6 +29,7 @@ const timeFilters = [
 export default function TrendsPage() {
   const { scenario, timeline } = useSimulation();
   const { canAccessFeature } = useSubscription();
+  const { t } = useI18n();
   const [filter, setFilter] = useState("24h");
 
   const hasAccess = canAccessFeature("LONG_TERM_TRENDS");
@@ -36,9 +38,9 @@ export default function TrendsPage() {
   const trendData = useMemo(() => generateTrendData(scenario, hours), [scenario, hours]);
 
   const charts = [
-    { key: "isi", label: "ISI Trend", color: "#DC2626", domain: [0, 100] as [number, number] },
-    { key: "hrv", label: "HRV Trend", color: "#0F172A", domain: [30, 60] as [number, number] },
-    { key: "spo2", label: "SpO₂ Trend", color: "#3B82F6", domain: [94, 99] as [number, number] },
+    { key: "isi", label: t("chart.isiTrend"), color: "#DC2626", domain: [0, 100] as [number, number] },
+    { key: "hrv", label: t("chart.hrvTrend"), color: "#0F172A", domain: [30, 60] as [number, number] },
+    { key: "spo2", label: t("chart.spo2Trend"), color: "#3B82F6", domain: [94, 99] as [number, number] },
     { key: "heartRate", label: "Heart Rate", color: "#DC2626", domain: [60, 90] as [number, number] },
     { key: "motion", label: "Activity / Motion", color: "#8B5CF6", domain: [0, 100] as [number, number] },
   ];

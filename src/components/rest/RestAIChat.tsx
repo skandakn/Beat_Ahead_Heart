@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import {
   Send,
   Bot,
@@ -99,6 +100,7 @@ const INITIAL_REST_MESSAGE: RestMessage = {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function RestAIChat() {
+  const { t } = useI18n();
   const { restProfile, recoveryState } = useFitRest();
 
   const [messages, setMessages] = useState<RestMessage[]>([INITIAL_REST_MESSAGE]);
@@ -232,7 +234,7 @@ export function RestAIChat() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Moon className="h-4 w-4 text-indigo-600" />
-            <CardTitle className="text-sm">AI Sleep Coach</CardTitle>
+            <CardTitle className="text-sm">{t("agent.aiSleepCoach")}</CardTitle>
           </div>
           {messages.length > 0 && (
             <button

@@ -3,6 +3,7 @@
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import type { ISIScore, PersonalBaseline } from "@/lib/isi/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -21,6 +22,7 @@ interface ISITrendChartProps {
 
 export function ISITrendChart({ history: historyProp, baselineIsi: baselineIsiProp }: ISITrendChartProps = {}) {
   const { history: simHistory, baseline } = useSimulation();
+  const { t } = useI18n();
   const history = historyProp ?? simHistory;
   const baselineIsi = baselineIsiProp ?? baseline.isi;
 
@@ -33,8 +35,8 @@ export function ISITrendChart({ history: historyProp, baselineIsi: baselineIsiPr
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">ISI Trend</CardTitle>
-        <p className="text-xs text-navy-500">Personal baseline comparison over time</p>
+        <CardTitle className="text-base">{t("chart.isiTrend")}</CardTitle>
+        <p className="text-xs text-navy-500">{t("chart.personalBaselineComparison")}</p>
       </CardHeader>
       <CardContent>
         <div className="h-64 w-full">
@@ -57,7 +59,7 @@ export function ISITrendChart({ history: historyProp, baselineIsi: baselineIsiPr
                   fontSize: "12px",
                 }}
               />
-              <ReferenceLine y={baselineIsi} stroke="#64748B" strokeDasharray="5 5" label={{ value: "Baseline", fontSize: 10, fill: "#64748B" }} />
+              <ReferenceLine y={baselineIsi} stroke="#64748B" strokeDasharray="5 5" label={{ value: t("stats.baseline"), fontSize: 10, fill: "#64748B" }} />
               <ReferenceLine y={60} stroke="#F59E0B" strokeDasharray="3 3" strokeOpacity={0.5} />
               <Area
                 type="monotone"
