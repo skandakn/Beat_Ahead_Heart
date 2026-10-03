@@ -252,8 +252,8 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
             </span>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-red-600 uppercase">
-              Emergency Assistance
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-navy-900 uppercase">
+              RapidCare
             </h1>
           </div>
           <p className="text-base sm:text-lg font-bold text-navy-800 mt-1">

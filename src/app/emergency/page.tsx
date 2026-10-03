@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowLeft, ShieldAlert } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { EmergencyAssistance } from '@/components/emergency/EmergencyAssistance';
 
 export const metadata: Metadata = {
-  title: 'Emergency Assistance — BeatAhead',
+  title: 'RapidCare — BeatAhead',
   description:
     'Immediate nearby healthcare options, emergency services direct call (112), and location sharing. Research/wellness prototype.',
 };

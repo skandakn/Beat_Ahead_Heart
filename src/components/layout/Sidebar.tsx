@@ -20,6 +20,7 @@ import {
   CreditCard,
   HeartPulse,
   LogIn,
+  Ambulance,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/lib/subscription/SubscriptionContext";
@@ -30,7 +31,6 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { LanguageSelector } from "./LanguageSelector";
-import { EmergencyButton } from "@/components/emergency/EmergencyButton";
 
 function useIsOnboarding(pathname: string): boolean {
   const [isOnboarding, setIsOnboarding] = useState(false);
@@ -56,6 +56,7 @@ function getNavItems(t: (key: TranslationKey) => string) {
     { href: "/rest", label: t("nav.restAgent"), icon: Moon },
     { href: "/vital-agent", label: t("nav.vitalAgent"), icon: HeartPulse },
     { href: "/clinician", label: t("nav.clinicianView"), icon: Stethoscope },
+    { href: "/emergency", label: t("nav.emergency"), icon: Ambulance },
   ];
 }
 
@@ -150,7 +151,6 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 space-y-3 border-t border-navy-100">
-        <EmergencyButton variant="sidebar" className="p-0" />
         <SystemStatusPanel compact />
         <SidebarSignOutButton />
         <div className="flex items-center justify-between px-1 pt-1">
@@ -238,9 +238,6 @@ export function MobileNav() {
               <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-navy-50" aria-label={t("common.closeMenu")}>
                 <X className="w-5 h-5" />
               </button>
-            </div>
-            <div className="mb-4">
-              <EmergencyButton variant="sidebar" className="p-0" />
             </div>
             <nav className="space-y-1">
               {navItems.map((item) => {
