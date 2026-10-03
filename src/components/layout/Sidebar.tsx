@@ -313,7 +313,6 @@ export function AppHeader() {
           {titles[pathname] || "BeatAhead"}
         </h2>
         <div className="flex items-center gap-2 sm:gap-3">
-          <EmergencyButton variant="header" />
           <LanguageSelector compact className="border-r border-navy-200 pe-2" />
           <SettingsButton />
 
