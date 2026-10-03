@@ -27,6 +27,7 @@ import {
   buildLocationMapLink,
 } from "@/lib/emergency/service";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface EmergencyAssistanceProps {
   onClose?: () => void;
@@ -243,37 +244,39 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
   }, [places]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 text-navy-900">
-      {/* ─── Header Section ─── */}
-      <div className="flex items-start justify-between gap-4 border-b border-navy-100 pb-5 mb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
-            </span>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-navy-900 uppercase">
-              RapidCare
-            </h1>
+    <div className={cn("w-full text-navy-900", isModal ? "max-w-4xl mx-auto p-4 sm:p-6" : "")}>
+      {/* ─── Header Section (Modal only) ─── */}
+      {isModal && (
+        <div className="flex items-start justify-between gap-4 border-b border-navy-100 pb-5 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+              </span>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-navy-900 uppercase">
+                RapidCare
+              </h1>
+            </div>
+            <p className="text-base sm:text-lg font-bold text-navy-800 mt-1">
+              How can we help?
+            </p>
+            <p className="text-xs text-navy-500 mt-0.5">
+              Your location is used only to find nearby emergency healthcare services.
+            </p>
           </div>
-          <p className="text-base sm:text-lg font-bold text-navy-800 mt-1">
-            How can we help?
-          </p>
-          <p className="text-xs text-navy-500 mt-0.5">
-            Your location is used only to find nearby emergency healthcare services.
-          </p>
-        </div>
 
-        {isModal && onClose && (
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-navy-400 hover:text-navy-700 hover:bg-navy-50 transition-colors"
-            aria-label="Close emergency modal"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        )}
-      </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-navy-400 hover:text-navy-700 hover:bg-navy-50 transition-colors"
+              aria-label="Close emergency modal"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ─── Medical Safety Disclaimer (Item 11) ─── */}
       <div className="mb-6 rounded-xl bg-amber-50 border border-amber-200 p-3 sm:p-4 text-xs text-amber-900 flex items-start gap-3 shadow-sm">

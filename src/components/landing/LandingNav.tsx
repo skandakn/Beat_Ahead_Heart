@@ -14,7 +14,7 @@ export function LandingNav() {
   const { isSignedIn } = useBeatAheadAuth();
   const { t } = useI18n();
   const links = [
-    { href: "/emergency", label: t("nav.emergency") },
+    { href: "/rapidcare", label: t("nav.emergency") },
     { href: "/helpline", label: t("nav.helpline") },
     { href: "/pricing", label: t("nav.pricing") },
     { href: "/methodology", label: t("nav.methodology") },

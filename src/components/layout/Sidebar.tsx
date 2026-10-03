@@ -56,7 +56,7 @@ function getNavItems(t: (key: TranslationKey) => string) {
     { href: "/rest", label: t("nav.restAgent"), icon: Moon },
     { href: "/vital-agent", label: t("nav.vitalAgent"), icon: HeartPulse },
     { href: "/clinician", label: t("nav.clinicianView"), icon: Stethoscope },
-    { href: "/emergency", label: t("nav.emergency"), icon: Ambulance },
+    { href: "/rapidcare", label: t("nav.emergency"), icon: Ambulance },
   ];
 }
 
@@ -293,6 +293,7 @@ export function AppHeader() {
     "/rest": t("nav.restAgent"),
     "/vital-agent": t("nav.vitalAgent"),
     "/clinician": t("header.clinicianDashboard"),
+    "/rapidcare": t("header.emergency"),
     "/emergency": t("header.emergency"),
     "/pricing": t("header.pricingPlans"),
     "/methodology": t("nav.methodology"),
