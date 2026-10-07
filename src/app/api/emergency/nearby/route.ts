@@ -12,15 +12,14 @@ export const maxDuration = 45;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { latitude, longitude, radiusMeters, query, cardiacOnly } = body;
+    const { latitude, longitude, radiusMeters, query } = body;
 
     // 1. Text-based manual search (hospital name, locality or city)
     if (query && typeof query === 'string' && query.trim().length > 0) {
       const places = await queryOverpassByText(
         query.trim(),
         typeof latitude === 'number' ? latitude : undefined,
-        typeof longitude === 'number' ? longitude : undefined,
-        cardiacOnly === true
+        typeof longitude === 'number' ? longitude : undefined
       );
 
       return NextResponse.json<EmergencyNearbyResponse>({
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
         ? radiusMeters / 1000
         : 10;
 
-    const places = await queryOverpassNearby(latitude, longitude, radiusKm, cardiacOnly === true);
+    const places = await queryOverpassNearby(latitude, longitude, radiusKm);
 
     return NextResponse.json<EmergencyNearbyResponse>({
       success: true,
@@ -91,7 +90,6 @@ export async function GET(req: NextRequest) {
     const lngStr = searchParams.get('lng') || searchParams.get('longitude');
     const radiusStr = searchParams.get('radius') || searchParams.get('radiusMeters');
     const query = searchParams.get('q') || searchParams.get('query');
-    const cardiacOnly = searchParams.get('cardiacOnly') === 'true';
 
     const latitude = latStr ? parseFloat(latStr) : undefined;
     const longitude = lngStr ? parseFloat(lngStr) : undefined;
@@ -101,8 +99,7 @@ export async function GET(req: NextRequest) {
       const places = await queryOverpassByText(
         query.trim(),
         latitude,
-        longitude,
-        cardiacOnly
+        longitude
       );
       return NextResponse.json<EmergencyNearbyResponse>({
         success: true,
@@ -130,7 +127,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const places = await queryOverpassNearby(latitude, longitude, radiusKm, cardiacOnly);
+    const places = await queryOverpassNearby(latitude, longitude, radiusKm);
 
     return NextResponse.json<EmergencyNearbyResponse>({
       success: true,

@@ -106,7 +106,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
 
   // Fetch places from backend API
   const fetchNearbyPlaces = useCallback(
-    async (lat?: number, lng?: number, queryText?: string, cardiacOnly = false) => {
+    async (lat?: number, lng?: number, queryText?: string) => {
       setIsLoadingPlaces(true);
       setApiError(null);
 
@@ -120,7 +120,6 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         if (queryText && queryText.trim()) {
           payload.query = queryText.trim();
         }
-        if (cardiacOnly) payload.cardiacOnly = true;
 
         const res = await fetch("/api/emergency/nearby", {
           method: "POST",
@@ -152,7 +151,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
   // When coordinates become available and no manual query is active, fetch nearby places
   useEffect(() => {
     if (coords && !activeQuery) {
-      fetchNearbyPlaces(coords.latitude, coords.longitude, undefined, activeFilter === "cardiac");
+      fetchNearbyPlaces(coords.latitude, coords.longitude);
     }
   }, [coords, activeQuery, activeFilter, fetchNearbyPlaces]);
 
@@ -161,7 +160,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
     e.preventDefault();
     if (!manualQuery.trim()) return;
     setActiveQuery(manualQuery.trim());
-    fetchNearbyPlaces(coords?.latitude, coords?.longitude, manualQuery.trim(), activeFilter === "cardiac");
+    fetchNearbyPlaces(coords?.latitude, coords?.longitude, manualQuery.trim());
   };
 
   // Reset to auto-location
@@ -169,7 +168,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
     setActiveQuery("");
     setManualQuery("");
     if (coords) {
-      fetchNearbyPlaces(coords.latitude, coords.longitude, undefined, activeFilter === "cardiac");
+      fetchNearbyPlaces(coords.latitude, coords.longitude);
     } else {
       requestLocation();
     }
@@ -224,7 +223,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
     if (activeFilter === "pharmacy") {
       return places.filter((p) => p.placeType === "pharmacy");
     }
-    if (activeFilter === "cardiac") return places;
+    if (activeFilter === "cardiac") return places.filter((p) => p.cardiacCare);
     return places;
   }, [places, activeFilter]);
 
@@ -505,7 +504,6 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         <button
           onClick={() => {
             setActiveFilter("cardiac");
-            fetchNearbyPlaces(coords?.latitude, coords?.longitude, activeQuery || undefined, true);
           }}
           className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
             activeFilter === "cardiac"
@@ -580,7 +578,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      if (coords) fetchNearbyPlaces(coords.latitude, coords.longitude, activeQuery, activeFilter === "cardiac");
+                      if (coords) fetchNearbyPlaces(coords.latitude, coords.longitude, activeQuery);
                       else requestLocation();
                     }}
                     className="border-navy-300 font-semibold gap-1.5"
@@ -618,6 +616,16 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
                 </Button>
               </a>
             </div>
+          </div>
+        )}
+
+        {!isLoadingPlaces && !apiError && activeFilter === "cardiac" && places.length > 0 && filteredPlaces.length === 0 && (
+          <div className="rounded-2xl border border-navy-100 bg-white p-8 text-center shadow-card">
+            <HeartPulse className="w-10 h-10 text-rose-400 mx-auto mb-3" />
+            <h4 className="text-base font-bold text-navy-900">No cardiac care listings were identified nearby.</h4>
+            <p className="text-xs text-navy-500 mt-1 max-w-md mx-auto">
+              The cardiac filter uses cardiology tags and cardiac-related facility names from OpenStreetMap. Try a wider-area search if you expect a specialist nearby.
+            </p>
           </div>
         )}
 

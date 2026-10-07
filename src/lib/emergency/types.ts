@@ -28,6 +28,7 @@ export interface HealthcarePlace {
   rating?: number;
   userRatingCount?: number;
   source?: 'openstreetmap' | 'google_places';
+  cardiacCare?: boolean;
 }
 
 export interface EmergencyNearbyRequest {
@@ -35,7 +36,7 @@ export interface EmergencyNearbyRequest {
   longitude?: number;
   radiusMeters?: number;
   query?: string;
-  typeFilter?: 'all' | 'hospital' | 'doctor' | 'pharmacy' | 'cardiac';
+  typeFilter?: 'all' | 'hospital' | 'doctor' | 'pharmacy';
 }
 
 export interface EmergencyNearbyResponse {
