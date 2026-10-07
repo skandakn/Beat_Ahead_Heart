@@ -52,7 +52,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
   const [activeQuery, setActiveQuery] = useState<string>("");
 
   // Filter Tabs
-  const [activeFilter, setActiveFilter] = useState<"all" | "hospital" | "doctor" | "pharmacy">("all");
+  const [activeFilter, setActiveFilter] = useState<"all" | "hospital" | "doctor" | "pharmacy" | "cardiac">("all");
 
   // Share Feedback State
   const [shareCopied, setShareCopied] = useState<boolean>(false);
@@ -106,7 +106,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
 
   // Fetch places from backend API
   const fetchNearbyPlaces = useCallback(
-    async (lat?: number, lng?: number, queryText?: string) => {
+    async (lat?: number, lng?: number, queryText?: string, cardiacOnly = false) => {
       setIsLoadingPlaces(true);
       setApiError(null);
 
@@ -120,6 +120,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         if (queryText && queryText.trim()) {
           payload.query = queryText.trim();
         }
+        if (cardiacOnly) payload.cardiacOnly = true;
 
         const res = await fetch("/api/emergency/nearby", {
           method: "POST",
@@ -151,16 +152,16 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
   // When coordinates become available and no manual query is active, fetch nearby places
   useEffect(() => {
     if (coords && !activeQuery) {
-      fetchNearbyPlaces(coords.latitude, coords.longitude);
+      fetchNearbyPlaces(coords.latitude, coords.longitude, undefined, activeFilter === "cardiac");
     }
-  }, [coords, activeQuery, fetchNearbyPlaces]);
+  }, [coords, activeQuery, activeFilter, fetchNearbyPlaces]);
 
   // Manual Search Handler
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualQuery.trim()) return;
     setActiveQuery(manualQuery.trim());
-    fetchNearbyPlaces(coords?.latitude, coords?.longitude, manualQuery.trim());
+    fetchNearbyPlaces(coords?.latitude, coords?.longitude, manualQuery.trim(), activeFilter === "cardiac");
   };
 
   // Reset to auto-location
@@ -168,7 +169,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
     setActiveQuery("");
     setManualQuery("");
     if (coords) {
-      fetchNearbyPlaces(coords.latitude, coords.longitude);
+      fetchNearbyPlaces(coords.latitude, coords.longitude, undefined, activeFilter === "cardiac");
     } else {
       requestLocation();
     }
@@ -223,6 +224,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
     if (activeFilter === "pharmacy") {
       return places.filter((p) => p.placeType === "pharmacy");
     }
+    if (activeFilter === "cardiac") return places;
     return places;
   }, [places, activeFilter]);
 
@@ -500,6 +502,21 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
           <Pill className="w-3.5 h-3.5" />
           Pharmacies ({counts.pharmacy})
         </button>
+        <button
+          onClick={() => {
+            setActiveFilter("cardiac");
+            fetchNearbyPlaces(coords?.latitude, coords?.longitude, activeQuery || undefined, true);
+          }}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+            activeFilter === "cardiac"
+              ? "bg-rose-700 text-white shadow-sm"
+              : "bg-rose-50 text-rose-700 hover:bg-rose-100"
+          }`}
+          data-testid="cardiac-care-filter"
+        >
+          <HeartPulse className="w-3.5 h-3.5" />
+          Cardiac Hospitals, Clinics & Doctors
+        </button>
       </div>
 
       {/* ─── NEARBY HEALTHCARE CARDS SECTION (Item 4 & 12) ─── */}
@@ -507,7 +524,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-bold uppercase tracking-wider text-navy-700 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-red-600" />
-            Nearby Healthcare Options
+            {activeFilter === "cardiac" ? "Nearby Cardiac Care" : "Nearby Healthcare Options"}
           </h3>
           <span className="text-xs text-navy-500">
             {places.length > 0 ? `Found ${filteredPlaces.length} facilities` : ""}
@@ -521,7 +538,11 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
               <HeartPulse className="h-6 w-6 animate-spin" />
             </div>
             <p className="text-sm font-bold text-navy-900">
-              {isLocating ? "Acquiring your GPS location..." : "Searching nearby healthcare facilities within ~10 km..."}
+              {isLocating
+                ? "Acquiring your GPS location..."
+                : activeFilter === "cardiac"
+                  ? "Searching nearby cardiac hospitals, clinics and doctors..."
+                  : "Searching nearby healthcare facilities within ~10 km..."}
             </p>
             <p className="text-xs text-navy-500 mt-1">
               Querying OpenStreetMap Overpass API for real-time healthcare providers
@@ -559,7 +580,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      if (coords) fetchNearbyPlaces(coords.latitude, coords.longitude, activeQuery);
+                      if (coords) fetchNearbyPlaces(coords.latitude, coords.longitude, activeQuery, activeFilter === "cardiac");
                       else requestLocation();
                     }}
                     className="border-navy-300 font-semibold gap-1.5"
@@ -581,10 +602,12 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
           >
             <Building2 className="w-10 h-10 text-navy-300 mx-auto mb-3" />
             <h4 className="text-base font-bold text-navy-900">
-              No nearby healthcare facilities were found.
+              {activeFilter === "cardiac" ? "No cardiac care listings were found nearby." : "No nearby healthcare facilities were found."}
             </h4>
             <p className="text-xs text-navy-500 mt-1 max-w-md mx-auto">
-              We couldn&apos;t locate facilities matching your search radius. Try searching for a nearby major city name, or call emergency services directly.
+              {activeFilter === "cardiac"
+                ? "Try another location. Results depend on cardiology specialty details listed in OpenStreetMap."
+                : "We couldn&apos;t locate facilities matching your search radius. Try searching for a nearby major city name, or call emergency services directly."}
             </p>
 
             <div className="mt-5 flex justify-center gap-3">

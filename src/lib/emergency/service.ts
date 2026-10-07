@@ -433,10 +433,11 @@ export function prioritizeHealthcarePlaces(places: HealthcarePlace[]): Healthcar
 export async function queryOverpassNearby(
   latitude: number,
   longitude: number,
-  radiusKm: number = 10
+  radiusKm: number = 10,
+  cardiacOnly: boolean = false
 ): Promise<HealthcarePlace[]> {
   // Check in-memory cache
-  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${radiusKm}`;
+  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${radiusKm}_${cardiacOnly ? 'cardiac' : 'all'}`;
   const cached = overpassCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.places;
@@ -446,9 +447,24 @@ export async function queryOverpassNearby(
   const safeRadiusKm = Math.min(Math.max(radiusKm, 1), 25);
   const radiusMeters = Math.round(Math.min(safeRadiusKm * 1000, 8000));
 
-  // Overpass QL query: searches for hospitals, clinics, doctors, pharmacies
-  // Uses indexed tags and fast radial indexing for high-traffic public mirrors
-  const query = `[out:json][timeout:10];
+  // Cardiac mode requires a cardiology specialty tag or an explicit cardiac name.
+  // This deliberately excludes general healthcare and pharmacies.
+  const cardiacTags = `["amenity"~"hospital|clinic|doctors"]
+    (around:${radiusMeters},${latitude},${longitude})
+    ["healthcare:speciality"~"cardiology|cardiac",i];`;
+  const cardiacSpecialtyQuery = `
+  node${cardiacTags}
+  way${cardiacTags}
+  relation${cardiacTags}
+  node["amenity"~"hospital|clinic|doctors"](around:${radiusMeters},${latitude},${longitude})["healthcare:specialty"~"cardiology|cardiac",i];
+  way["amenity"~"hospital|clinic|doctors"](around:${radiusMeters},${latitude},${longitude})["healthcare:specialty"~"cardiology|cardiac",i];
+  relation["amenity"~"hospital|clinic|doctors"](around:${radiusMeters},${latitude},${longitude})["healthcare:specialty"~"cardiology|cardiac",i];
+  node["amenity"~"hospital|clinic|doctors"](around:${radiusMeters},${latitude},${longitude})["name"~"cardio|cardiac|heart",i];
+  way["amenity"~"hospital|clinic|doctors"](around:${radiusMeters},${latitude},${longitude})["name"~"cardio|cardiac|heart",i];
+  relation["amenity"~"hospital|clinic|doctors"](around:${radiusMeters},${latitude},${longitude})["name"~"cardio|cardiac|heart",i];`;
+  const query = cardiacOnly
+    ? `[out:json][timeout:10];(${cardiacSpecialtyQuery});out center tags 100;`
+    : `[out:json][timeout:10];
 (
   node["amenity"="hospital"](around:${radiusMeters},${latitude},${longitude});
   node["amenity"="clinic"](around:${radiusMeters},${latitude},${longitude});
@@ -527,7 +543,8 @@ out center tags 50;`;
 export async function queryOverpassByText(
   queryText: string,
   userLat?: number,
-  userLon?: number
+  userLon?: number,
+  cardiacOnly: boolean = false
 ): Promise<HealthcarePlace[]> {
   const sanitized = queryText.replace(/[^\w\s-]/g, '').trim();
   if (!sanitized) return [];
@@ -535,7 +552,7 @@ export async function queryOverpassByText(
   // If user coordinates are available, fetch nearby and filter locally first
   if (typeof userLat === 'number' && typeof userLon === 'number') {
     try {
-      const nearby = await queryOverpassNearby(userLat, userLon, 15);
+      const nearby = await queryOverpassNearby(userLat, userLon, 15, cardiacOnly);
       const qLower = sanitized.toLowerCase();
       const matched = nearby.filter(
         (p) =>
@@ -547,7 +564,13 @@ export async function queryOverpassByText(
   }
 
   // Name search on Overpass
-  const query = `[out:json][timeout:10];
+  const cardiacTextStatements = (element: 'node' | 'way') => `
+  ${element}["amenity"~"hospital|clinic|doctors"]["name"~"${sanitized}",i]["healthcare:speciality"~"cardiology|cardiac",i];
+  ${element}["amenity"~"hospital|clinic|doctors"]["name"~"${sanitized}",i]["healthcare:specialty"~"cardiology|cardiac",i];
+  ${element}["amenity"~"hospital|clinic|doctors"]["name"~"${sanitized}",i]["name"~"cardio|cardiac|heart",i];`;
+  const query = cardiacOnly
+    ? `[out:json][timeout:10];(${cardiacTextStatements('node')}${cardiacTextStatements('way')});out center tags 30;`
+    : `[out:json][timeout:10];
 (
   node["amenity"~"hospital|clinic|doctors|pharmacy"]["name"~"${sanitized}",i];
   way["amenity"~"hospital|clinic|doctors|pharmacy"]["name"~"${sanitized}",i];

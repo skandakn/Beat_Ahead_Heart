@@ -35,7 +35,7 @@ export interface EmergencyNearbyRequest {
   longitude?: number;
   radiusMeters?: number;
   query?: string;
-  typeFilter?: 'all' | 'hospital' | 'doctor' | 'pharmacy';
+  typeFilter?: 'all' | 'hospital' | 'doctor' | 'pharmacy' | 'cardiac';
 }
 
 export interface EmergencyNearbyResponse {
