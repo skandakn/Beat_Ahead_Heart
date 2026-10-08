@@ -348,7 +348,7 @@ export interface GoogleFitVitalsData {
   recentHeartRate: GoogleFitHeartRateSample[];
   recentBloodPressure: GoogleFitBloodPressureReading[];
   recentSpO2: GoogleFitOxygenSaturationReading[];
-  source: "google_fit" | "calibrated_baseline";
+  source: "google_fit" | "calibrated_baseline" | "demo";
   lastSynced: number;
 }
 

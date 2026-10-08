@@ -1015,9 +1015,9 @@ export async function fetchAndMapVitals(
         average: spo2Avg,
         lastRecorded: realSpO2s[0]?.timestamp ?? now,
       },
-      recentHeartRate: realHeartRates.slice(0, 30),
+      recentHeartRate: realHeartRates.slice(0, 500),
       recentBloodPressure: realBloodPressures.slice(0, 10),
-      recentSpO2: realSpO2s.slice(0, 10),
+      recentSpO2: realSpO2s.slice(0, 200),
       source: "google_fit",
       lastSynced: now,
     };

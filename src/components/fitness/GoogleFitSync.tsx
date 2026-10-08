@@ -162,6 +162,7 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
     googleFitVitals,
     importPhoneSleepData,
     importPhoneNutritionData,
+    importPhoneVitalsData,
     clearGoogleFitError,
     applyVitalsToHealthRecord,
     updateVitalsPreset,
@@ -409,6 +410,28 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                     </Button>
                   </div>
                 </div>
+
+                {/* Phone Vitals Sync Option */}
+                {(!googleFitVitals || googleFitVitals.source === "calibrated_baseline" || googleFitVitals.recentHeartRate.length < 50) && (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-950">
+                      <HeartPulse className="h-3.5 w-3.5 text-sky-600" />
+                      Phone Vitals Tracking Sync (7 Days Demo)
+                    </div>
+                    <p className="text-[11px] text-navy-600 leading-relaxed">
+                      Smart watch vitals can take time to sync to Google&apos;s cloud servers. Load 7 days of realistic heart rate and SpO2 data for Trends demonstration:
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={importPhoneVitalsData}
+                      className="text-xs bg-white text-sky-700 border-sky-200 hover:bg-sky-50 gap-1.5 font-medium shadow-xs"
+                    >
+                      <HeartPulse className="h-3.5 w-3.5 text-sky-600" />
+                      Sync 7 Days Vitals Data from Phone
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : variant === "nutri" ? (
               <div className="space-y-3">

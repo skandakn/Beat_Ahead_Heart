@@ -16,6 +16,8 @@ import type {
   RecoveryState,
   GoogleFitNutritionData,
   GoogleFitVitalsData,
+  GoogleFitHeartRateSample,
+  GoogleFitOxygenSaturationReading,
 } from "./types";
 import {
   DEFAULT_FITNESS_PROFILE,
@@ -72,6 +74,7 @@ interface FitRestContextValue {
   disconnectGoogleFit: () => void;
   importPhoneSleepData: () => void;
   importPhoneNutritionData: () => void;
+  importPhoneVitalsData: () => void;
   clearGoogleFitError: () => void;
   applyVitalsToHealthRecord: () => void;
   updateVitalsPreset: (preset: "normal" | "elevated" | "recovery") => void;
@@ -739,6 +742,109 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  // ── Import Phone Vitals Data (7 Days Realistic Demo) ──────────────────────
+  const importPhoneVitalsData = useCallback(() => {
+    setGoogleFitError(null);
+    const now = Date.now();
+    
+    // Generate 168 hourly heart rate samples (7 days)
+    // Circadian pattern: lower at night (60-65), higher during day (70-85)
+    // Exercise spikes: 2-3 times per day
+    const recentHeartRate: GoogleFitHeartRateSample[] = Array.from({ length: 168 }, (_, i) => {
+      const timestamp = now - (168 - i) * 3600000; // Hourly backwards from now
+      
+      // Time of day (0-23)
+      const hourOfDay = new Date(timestamp).getHours();
+      
+      // Base circadian rhythm
+      let baseBpm = 68;
+      if (hourOfDay >= 0 && hourOfDay < 6) baseBpm = 58;  // Deep sleep
+      else if (hourOfDay >= 6 && hourOfDay < 9) baseBpm = 65;  // Morning
+      else if (hourOfDay >= 9 && hourOfDay < 18) baseBpm = 72;  // Daytime
+      else if (hourOfDay >= 18 && hourOfDay < 22) baseBpm = 70;  // Evening
+      else baseBpm = 62;  // Pre-sleep
+      
+      // Exercise spikes (2-3 per day)
+      const isExerciseHour = (hourOfDay === 7 || hourOfDay === 17); // Morning/evening workout
+      const exerciseBoost = isExerciseHour ? Math.random() * 30 + 20 : 0;
+      
+      // Random variation
+      const variation = (Math.random() - 0.5) * 8;
+      
+      const bpm = Math.round(Math.max(50, Math.min(130, baseBpm + exerciseBoost + variation)));
+      
+      return {
+        timestamp,
+        bpm,
+        resting: bpm <= 75,
+      };
+    });
+    
+    // Generate 42 SpO2 samples (every 4 hours for 7 days)
+    const recentSpO2: GoogleFitOxygenSaturationReading[] = Array.from({ length: 42 }, (_, i) => {
+      const timestamp = now - (42 - i) * 4 * 3600000; // Every 4 hours
+      
+      // Realistic SpO2: 96-99%, slight dips during sleep
+      const hourOfDay = new Date(timestamp).getHours();
+      const isSleep = hourOfDay >= 0 && hourOfDay < 6;
+      const baseSpO2 = isSleep ? 96.5 : 98;
+      const variation = (Math.random() - 0.5) * 1.5;
+      
+      return {
+        timestamp,
+        percentage: Math.round((baseSpO2 + variation) * 10) / 10,
+      };
+    });
+    
+    // Calculate aggregate statistics from generated data
+    const allBpms = recentHeartRate.map(r => r.bpm);
+    const avgBpm = Math.round(allBpms.reduce((a, b) => a + b, 0) / allBpms.length);
+    const minBpm = Math.min(...allBpms);
+    const maxBpm = Math.max(...allBpms);
+    const restingBpm = Math.round(recentHeartRate.filter(r => r.resting).map(r => r.bpm).reduce((a, b) => a + b, 0) / recentHeartRate.filter(r => r.resting).length);
+    
+    const avgSpO2 = Math.round((recentSpO2.reduce((a, b) => a + b.percentage, 0) / recentSpO2.length) * 10) / 10;
+    
+    const phoneVitals: GoogleFitVitalsData = {
+      currentHeartRate: recentHeartRate[recentHeartRate.length - 1].bpm,
+      restingHeartRate: restingBpm,
+      minHeartRate: minBpm,
+      maxHeartRate: maxBpm,
+      heartPoints: 120,
+      bloodPressure: {
+        systolic: 118,
+        diastolic: 76,
+        category: "normal",
+        lastRecorded: now,
+      },
+      spo2: {
+        current: recentSpO2[recentSpO2.length - 1].percentage,
+        average: avgSpO2,
+        lastRecorded: now,
+      },
+      recentHeartRate,
+      recentBloodPressure: [
+        { timestamp: now, systolic: 118, diastolic: 76, category: "normal" },
+        { timestamp: now - 86400000, systolic: 120, diastolic: 78, category: "normal" },
+        { timestamp: now - 2 * 86400000, systolic: 116, diastolic: 74, category: "normal" },
+      ],
+      recentSpO2,
+      source: "demo",
+      lastSynced: now,
+    };
+    
+    setGoogleFitVitals(phoneVitals);
+    try {
+      localStorage.setItem(STORAGE_KEYS.VITALS_HISTORY, JSON.stringify(phoneVitals));
+    } catch {}
+    
+    const syncedAt = Date.now();
+    setGoogleFitLastSynced(syncedAt);
+    try {
+      localStorage.setItem(GFIT_SYNCED_KEY, String(syncedAt));
+    } catch {}
+  }, []);
+
   const clearGoogleFitError = useCallback(() => {
     setGoogleFitError(null);
   }, []);
@@ -980,6 +1086,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     disconnectGoogleFit,
     importPhoneSleepData,
     importPhoneNutritionData,
+    importPhoneVitalsData,
     clearGoogleFitError,
     applyVitalsToHealthRecord,
     updateVitalsPreset,
