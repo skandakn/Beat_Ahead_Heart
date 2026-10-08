@@ -52,7 +52,7 @@ export default function PricingPage() {
               </li>
               <li className="flex items-center gap-2.5 opacity-50">
                 <Lock className="w-4 h-4 text-navy-400 shrink-0" />
-                <span className="line-through">AI Insights</span>
+                <span className="line-through">Advanced contribution analysis</span>
               </li>
               <li className="flex items-center gap-2.5 opacity-50">
                 <Lock className="w-4 h-4 text-navy-400 shrink-0" />
@@ -103,7 +103,7 @@ export default function PricingPage() {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[3]" />
-                <span className="font-medium">AI Insights & contribution graph</span>
+                <span className="font-medium">AI contribution graph</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[3]" />

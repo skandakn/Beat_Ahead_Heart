@@ -6,7 +6,6 @@ import { useBeatAheadAuth, SafeUserButton } from "@/lib/auth/ClerkAuthWrapper";
 
 import {
   BarChart3,
-  Brain,
   Dumbbell,
   Heart,
   LayoutDashboard,
@@ -50,7 +49,6 @@ function getNavItems(t: (key: TranslationKey) => string) {
     { href: "/dashboard", label: t("nav.overview"), icon: LayoutDashboard },
     { href: "/health-record", label: t("nav.healthRecord"), icon: HeartPulse },
     { href: "/trends", label: t("nav.trends"), icon: BarChart3 },
-    { href: "/insights", label: t("nav.aiInsights"), icon: Brain },
     { href: "/nutri-agent", label: t("nav.nutriAgent"), icon: Salad },
     { href: "/fitness", label: t("nav.fitnessAgent"), icon: Dumbbell },
     { href: "/rest", label: t("nav.restAgent"), icon: Moon },
@@ -286,7 +284,6 @@ export function AppHeader() {
   const titles: Record<string, string> = {
     "/dashboard": t("header.cardiovascularDashboard"),
     "/trends": t("header.longTermTrends"),
-    "/insights": t("nav.aiInsights"),
     "/nutri-agent": t("nav.nutriAgent"),
     "/health-record": t("header.myHealthRecord"),
     "/fitness": t("nav.fitnessAgent"),

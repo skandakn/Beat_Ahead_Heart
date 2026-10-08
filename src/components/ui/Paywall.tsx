@@ -64,7 +64,7 @@ export function Paywall({
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span>AI Insights & feature contribution graph</span>
+                <span>AI feature contribution graph</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
