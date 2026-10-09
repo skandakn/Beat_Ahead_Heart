@@ -26,6 +26,7 @@ import {
   EMERGENCY_SERVICES_TEL,
   buildLocationMapLink,
 } from "@/lib/emergency/service";
+import { EmergencyCallDialog } from "./EmergencyCallDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,24 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [permissionDenied, setPermissionDenied] = useState<boolean>(false);
+
+  // Active Emergency Call State
+  const [activeCall, setActiveCall] = useState<{
+    phoneNumber: string;
+    facilityName: string;
+    isEmergency112: boolean;
+  } | null>(null);
+
+  const handleInitiateCall = useCallback(
+    (info: { phoneNumber: string; facilityName: string; isEmergency112: boolean }) => {
+      // Trigger native phone dialer on mobile devices
+      if (typeof window !== "undefined" && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+        window.location.href = `tel:${info.phoneNumber}`;
+      }
+      setActiveCall(info);
+    },
+    []
+  );
 
   // Search & Places State
   const [places, setPlaces] = useState<HealthcarePlace[]>([]);
@@ -283,7 +302,15 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
       <div className="mb-6">
         <a
           href={EMERGENCY_SERVICES_TEL}
-          className="group relative flex items-center justify-between gap-4 w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-600 via-red-600 to-rose-700 text-white shadow-lg shadow-red-600/30 hover:shadow-xl hover:shadow-red-600/40 hover:from-red-500 hover:to-rose-600 transition-all duration-200 active:scale-[0.99] border-2 border-red-500"
+          onClick={(e) => {
+            e.preventDefault();
+            handleInitiateCall({
+              phoneNumber: EMERGENCY_SERVICES_NUMBER,
+              facilityName: "Emergency Services (112)",
+              isEmergency112: true,
+            });
+          }}
+          className="group relative flex items-center justify-between gap-4 w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-600 via-red-600 to-rose-700 text-white shadow-lg shadow-red-600/30 hover:shadow-xl hover:shadow-red-600/40 hover:from-red-500 hover:to-rose-600 transition-all duration-200 active:scale-[0.99] border-2 border-red-500 cursor-pointer"
           data-testid="emergency-services-button"
         >
           <div className="flex items-center gap-3.5 sm:gap-4">
@@ -568,7 +595,17 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2.5">
-                  <a href={EMERGENCY_SERVICES_TEL}>
+                  <a
+                    href={EMERGENCY_SERVICES_TEL}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleInitiateCall({
+                        phoneNumber: EMERGENCY_SERVICES_NUMBER,
+                        facilityName: "Emergency Services (112)",
+                        isEmergency112: true,
+                      });
+                    }}
+                  >
                     <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white font-bold gap-1.5">
                       <Phone className="w-3.5 h-3.5" />
                       Call Emergency Services (112)
@@ -609,7 +646,17 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
             </p>
 
             <div className="mt-5 flex justify-center gap-3">
-              <a href={EMERGENCY_SERVICES_TEL}>
+              <a
+                href={EMERGENCY_SERVICES_TEL}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleInitiateCall({
+                    phoneNumber: EMERGENCY_SERVICES_NUMBER,
+                    facilityName: "Emergency Services (112)",
+                    isEmergency112: true,
+                  });
+                }}
+              >
                 <Button className="bg-red-600 hover:bg-red-700 text-white font-bold gap-1.5">
                   <Phone className="w-4 h-4" />
                   Call Emergency Services (112)
@@ -632,7 +679,11 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         {/* Facility Cards (Item 4, 5, 6, 12) */}
         {!isLoadingPlaces &&
           filteredPlaces.map((place) => (
-            <HealthcarePlaceCard key={place.id} place={place} />
+            <HealthcarePlaceCard
+              key={place.id}
+              place={place}
+              onCall={handleInitiateCall}
+            />
           ))}
 
         {/* OpenStreetMap Attribution (Item 14) */}
@@ -651,6 +702,17 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
           <span>Search radius ~10 km</span>
         </div>
       </div>
+
+      {/* ─── LIVE EMERGENCY CALL DIALOG ─── */}
+      {activeCall && (
+        <EmergencyCallDialog
+          phoneNumber={activeCall.phoneNumber}
+          facilityName={activeCall.facilityName}
+          isEmergency112={activeCall.isEmergency112}
+          coords={coords}
+          onClose={() => setActiveCall(null)}
+        />
+      )}
     </div>
   );
 }
@@ -666,7 +728,13 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
  * - "Call" button (tel: link)
  * - "Navigate" button (Google Maps directions)
  */
-export function HealthcarePlaceCard({ place }: { place: HealthcarePlace }) {
+export function HealthcarePlaceCard({
+  place,
+  onCall,
+}: {
+  place: HealthcarePlace;
+  onCall?: (info: { phoneNumber: string; facilityName: string; isEmergency112: boolean }) => void;
+}) {
   const isHospital = place.placeType === "hospital" || place.placeType === "emergency_room";
   const isDoctor = place.placeType === "doctor" || place.placeType === "clinic";
   const isPharmacy = place.placeType === "pharmacy";
@@ -754,6 +822,14 @@ export function HealthcarePlaceCard({ place }: { place: HealthcarePlace }) {
           {sanitizedTel ? (
             <a
               href={`tel:${sanitizedTel}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onCall?.({
+                  phoneNumber: sanitizedTel,
+                  facilityName: place.name,
+                  isEmergency112: false,
+                });
+              }}
               className="flex-1 sm:w-32"
               data-testid="facility-call-button"
             >
