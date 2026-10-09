@@ -3,10 +3,12 @@
 import { useState, useMemo } from "react";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useSubscription } from "@/lib/subscription/SubscriptionContext";
+import { useFitRest, FitRestProvider } from "@/lib/fit-rest/FitRestContext";
 import { Paywall } from "@/components/ui/Paywall";
 import { generateTrendData } from "@/lib/isi/simulation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 import {
   ResponsiveContainer,
@@ -25,20 +27,165 @@ const timeFilters = [
   { id: "30d", label: "30 Days", hours: 720 },
 ];
 
-export default function TrendsPage() {
+/**
+ * Generate trend data from real Google Fit vitals when available.
+ * Groups heart rate and SpO2 samples into time buckets for the specified hours window.
+ */
+function generateRealTrendData(
+  googleFitVitals: any,
+  hours: number
+): { time: string; isi: number; hrv: number; spo2: number; heartRate: number; motion: number }[] | null {
+  if (!googleFitVitals || !googleFitVitals.recentHeartRate || googleFitVitals.recentHeartRate.length === 0) {
+    return null;
+  }
+
+  const now = Date.now();
+  const startTime = now - hours * 60 * 60 * 1000;
+  const points = hours === 24 ? 24 : hours === 168 ? 42 : 30;
+  const bucketDuration = (hours * 60 * 60 * 1000) / points;
+
+  // Filter samples within time range
+  const hrSamples = googleFitVitals.recentHeartRate.filter(
+    (s: any) => s.timestamp >= startTime && s.timestamp <= now
+  );
+  const spo2Samples = (googleFitVitals.recentSpO2 || []).filter(
+    (s: any) => s.timestamp >= startTime && s.timestamp <= now
+  );
+
+  // Create buckets
+  const buckets: Array<{
+    time: string;
+    hrValues: number[];
+    spo2Values: number[];
+    timestamp: number;
+  }> = [];
+
+  for (let i = 0; i < points; i++) {
+    const bucketStart = startTime + i * bucketDuration;
+    const bucketEnd = bucketStart + bucketDuration;
+    const bucketMid = (bucketStart + bucketEnd) / 2;
+
+    const hour = Math.floor(((i * bucketDuration) / (1000 * 60 * 60)) % 24);
+    const minute = Math.floor(((i * bucketDuration) / (1000 * 60)) % 60);
+
+    buckets.push({
+      time: `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`,
+      hrValues: hrSamples
+        .filter((s: any) => s.timestamp >= bucketStart && s.timestamp < bucketEnd)
+        .map((s: any) => s.bpm),
+      spo2Values: spo2Samples
+        .filter((s: any) => s.timestamp >= bucketStart && s.timestamp < bucketEnd)
+        .map((s: any) => s.percentage),
+      timestamp: bucketMid,
+    });
+  }
+
+  // Calculate averages and derive ISI/HRV
+  const baselineHR = googleFitVitals.restingHeartRate || 68;
+  const data = buckets.map((bucket, idx) => {
+    const avgHR = bucket.hrValues.length > 0
+      ? Math.round(bucket.hrValues.reduce((a, b) => a + b, 0) / bucket.hrValues.length)
+      : null;
+    
+    const avgSpO2 = bucket.spo2Values.length > 0
+      ? Math.round((bucket.spo2Values.reduce((a, b) => a + b, 0) / bucket.spo2Values.length) * 10) / 10
+      : null;
+
+    // Interpolate missing values from nearby buckets
+    const finalHR = avgHR ?? interpolateValue(buckets, idx, 'hrValues', baselineHR);
+    const finalSpO2 = avgSpO2 ?? interpolateValue(buckets, idx, 'spo2Values', 97.5);
+
+    // Derive HRV approximation from HR variability (simplified)
+    const hrv = bucket.hrValues.length > 1
+      ? Math.round(calculateHRV(bucket.hrValues))
+      : Math.round(50 + (baselineHR - finalHR) * 0.5);
+
+    // Derive ISI from HR and HRV (matching existing formula)
+    const isi = Math.round(45 + (finalHR - 68) * 0.8 + (50 - hrv) * 0.3);
+
+    return {
+      time: bucket.time,
+      isi: Math.max(0, Math.min(100, isi)),
+      hrv: Math.max(30, Math.min(80, hrv)),
+      spo2: finalSpO2,
+      heartRate: finalHR,
+      motion: 0, // Motion data not available from Google Fit vitals
+    };
+  });
+
+  return data;
+}
+
+/**
+ * Simple HRV calculation from heart rate values (SDNN approximation)
+ */
+function calculateHRV(hrValues: number[]): number {
+  if (hrValues.length < 2) return 50;
+  
+  const mean = hrValues.reduce((a, b) => a + b, 0) / hrValues.length;
+  const squaredDiffs = hrValues.map(val => Math.pow(val - mean, 2));
+  const variance = squaredDiffs.reduce((a, b) => a + b, 0) / hrValues.length;
+  const stdDev = Math.sqrt(variance);
+  
+  // Convert HR std dev to approximate HRV in ms
+  return Math.min(80, Math.max(30, stdDev * 15));
+}
+
+/**
+ * Interpolate missing values from nearby buckets
+ */
+function interpolateValue(
+  buckets: Array<{ hrValues: number[]; spo2Values: number[] }>,
+  currentIdx: number,
+  field: 'hrValues' | 'spo2Values',
+  defaultValue: number
+): number {
+  // Look back up to 5 buckets for a valid value
+  for (let offset = 1; offset <= 5; offset++) {
+    const prevIdx = currentIdx - offset;
+    if (prevIdx >= 0 && buckets[prevIdx][field].length > 0) {
+      const values = buckets[prevIdx][field];
+      return Math.round(values.reduce((a: number, b: number) => a + b, 0) / values.length);
+    }
+  }
+  
+  // Look forward up to 5 buckets
+  for (let offset = 1; offset <= 5; offset++) {
+    const nextIdx = currentIdx + offset;
+    if (nextIdx < buckets.length && buckets[nextIdx][field].length > 0) {
+      const values = buckets[nextIdx][field];
+      return Math.round(values.reduce((a: number, b: number) => a + b, 0) / values.length);
+    }
+  }
+  
+  return defaultValue;
+}
+
+function TrendsPageInner() {
   const { scenario, timeline } = useSimulation();
   const { canAccessFeature } = useSubscription();
+  const { googleFitVitals, googleFitConnected } = useFitRest();
+  const { t } = useI18n();
   const [filter, setFilter] = useState("24h");
 
   const hasAccess = canAccessFeature("LONG_TERM_TRENDS");
 
   const hours = timeFilters.find((f) => f.id === filter)?.hours ?? 24;
-  const trendData = useMemo(() => generateTrendData(scenario, hours), [scenario, hours]);
+  
+  // Use real Google Fit data when available, fallback to simulation
+  const trendData = useMemo(() => {
+    const realData = generateRealTrendData(googleFitVitals, hours);
+    if (realData && realData.length > 0) {
+      return realData;
+    }
+    // Fallback to simulation data when no Google Fit data
+    return generateTrendData(scenario, hours);
+  }, [googleFitVitals, hours, scenario]);
 
   const charts = [
-    { key: "isi", label: "ISI Trend", color: "#DC2626", domain: [0, 100] as [number, number] },
-    { key: "hrv", label: "HRV Trend", color: "#0F172A", domain: [30, 60] as [number, number] },
-    { key: "spo2", label: "SpO₂ Trend", color: "#3B82F6", domain: [94, 99] as [number, number] },
+    { key: "isi", label: t("chart.isiTrend"), color: "#DC2626", domain: [0, 100] as [number, number] },
+    { key: "hrv", label: t("chart.hrvTrend"), color: "#0F172A", domain: [30, 60] as [number, number] },
+    { key: "spo2", label: t("chart.spo2Trend"), color: "#3B82F6", domain: [94, 99] as [number, number] },
     { key: "heartRate", label: "Heart Rate", color: "#DC2626", domain: [60, 90] as [number, number] },
     { key: "motion", label: "Activity / Motion", color: "#8B5CF6", domain: [0, 100] as [number, number] },
   ];
@@ -125,4 +272,12 @@ export default function TrendsPage() {
   }
 
   return content;
+}
+
+export default function TrendsPage() {
+  return (
+    <FitRestProvider>
+      <TrendsPageInner />
+    </FitRestProvider>
+  );
 }

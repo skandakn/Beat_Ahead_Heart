@@ -7,6 +7,7 @@ import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
 import { Paywall } from "@/components/ui/Paywall";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 import { cn, getTrendLabel } from "@/lib/utils";
 import { ISIGauge } from "@/components/isi/ISIGauge";
@@ -30,6 +31,7 @@ import { generateClinicalPDF } from "@/lib/pdf/generateClinicalReport";
 import Link from "next/link";
 
 export default function ClinicianPage() {
+  const { t } = useI18n();
   const { canAccessFeature } = useSubscription();
   const { user } = useBeatAheadAuth();
   const {
@@ -261,10 +263,10 @@ export default function ClinicianPage() {
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Current ISI", value: selected.currentISI },
-              { label: "Trend", value: getTrendLabel(selected.trend) },
-              { label: "Signal Quality", value: `${Math.round(selected.signalQuality)}%` },
-              { label: "Last Updated", value: selected.lastUpdated },
+              { label: t("stats.currentISI"), value: selected.currentISI },
+              { label: t("stats.trend"), value: getTrendLabel(selected.trend, t) },
+              { label: t("clinician.signalQuality"), value: `${Math.round(selected.signalQuality)}%` },
+              { label: t("clinician.lastUpdated"), value: selected.lastUpdated },
             ].map((s) => (
               <div key={s.label} className="p-3.5 rounded-lg bg-white border border-navy-100 shadow-xs">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-navy-400">{s.label}</p>

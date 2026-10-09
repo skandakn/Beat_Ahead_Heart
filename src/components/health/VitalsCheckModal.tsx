@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import {
   createEmptyPatientRecord,
   BLOOD_PRESSURE_OPTIONS,
@@ -133,6 +134,7 @@ function ToggleBtn({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function VitalsCheckModal() {
+  const { t } = useI18n();
   const { userId, isLoaded, isSignedIn } = useBeatAheadAuth();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -316,8 +318,8 @@ export function VitalsCheckModal() {
               <HeartPulse className="w-4.5 h-4.5 text-red-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Daily Vitals Check</h2>
-              <p className="text-[11px] text-white/40">Update your readings for today</p>
+              <h2 className="text-base font-bold text-white">{t("vitals.dailyVitalsCheck")}</h2>
+              <p className="text-[11px] text-white/40">{t("vitals.updateReadingsToday")}</p>
             </div>
           </div>
           <button
@@ -335,8 +337,8 @@ export function VitalsCheckModal() {
             <div className="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
               <CheckCircle2 className="w-7 h-7 text-emerald-400" />
             </div>
-            <p className="text-lg font-bold text-white">Vitals saved!</p>
-            <p className="text-xs text-white/40">Your health record has been updated.</p>
+            <p className="text-lg font-bold text-white">{t("vitals.vitalsSaved")}</p>
+            <p className="text-xs text-white/40">{t("vitals.healthRecordUpdated")}</p>
           </div>
         ) : (
           <div className="px-5 py-5 space-y-5">

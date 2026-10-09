@@ -3,9 +3,11 @@
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, Info, CheckCircle2, ShieldAlert } from "lucide-react";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 export function RiskTrendBanner() {
   const { currentScore, baseline } = useSimulation();
+  const { t } = useI18n();
 
   if (!currentScore) return null;
 
@@ -15,29 +17,29 @@ export function RiskTrendBanner() {
 
   let bannerStyle = "border-emerald-200 bg-emerald-50 text-emerald-900";
   let icon = <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />;
-  let title = "Physiological patterns are within the user's recent personal baseline range.";
-  let subtitle = "Multi-sensor autonomic and vascular transit metrics reflect stable resting conditions.";
+  let title = t("risk.banner.withinBaseline.title");
+  let subtitle = t("risk.banner.withinBaseline.subtitle");
 
   if (state === "Insufficient Signal Quality") {
     bannerStyle = "border-slate-300 bg-slate-100 text-slate-900";
     icon = <Info className="w-5 h-5 text-slate-600 shrink-0 mt-0.5" />;
-    title = "Signal quality is degraded or sensor contact is unstable.";
-    subtitle = "Calculations are paused to prevent false precision. Please check sensor fit.";
+    title = t("risk.banner.insufficientSignal.title");
+    subtitle = t("risk.banner.insufficientSignal.subtitle");
   } else if (state === "Baseline Establishing") {
     bannerStyle = "border-blue-200 bg-blue-50 text-blue-900";
     icon = <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />;
-    title = "Establishing personal baseline...";
-    subtitle = "Observing quiet resting patterns. Adaptive baseline stabilizes after 10 minutes.";
+    title = t("risk.banner.establishing.title");
+    subtitle = t("risk.banner.establishing.subtitle");
   } else if (state === "Elevated Model Evidence" || modelAlert) {
     bannerStyle = "border-rose-200 bg-rose-50 text-rose-900";
     icon = <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />;
-    title = "Model evidence is elevated relative to the configured research threshold (0.156742).";
-    subtitle = "Prospective early-warning pattern detected in multimodal signals. Observational trend only.";
+    title = t("risk.banner.elevatedEvidence.title");
+    subtitle = t("risk.banner.elevatedEvidence.subtitle");
   } else if (isElevatedTrend) {
     bannerStyle = "border-amber-200 bg-amber-50 text-amber-900";
     icon = <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />;
-    title = "Observed physiological trend has moved above the user's personal baseline range.";
-    subtitle = "Persistent changes may warrant discussion with a qualified healthcare professional.";
+    title = t("risk.banner.elevatedTrend.title");
+    subtitle = t("risk.banner.elevatedTrend.subtitle");
   }
 
   return (

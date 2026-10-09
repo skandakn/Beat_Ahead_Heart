@@ -2,6 +2,7 @@
 
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { cn, getTrendLabel } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 const signals = ["PPG", "ECG", "SpO₂", "IMU"];
 const steps = ["AI Fusion", "ISI 0–100", "Trend"];
@@ -14,8 +15,9 @@ const signalPaths = [
 
 export function HeroVisualization({ className }: { className?: string }) {
   const { currentScore } = useSimulation();
+  const { t } = useI18n();
   const score = currentScore?.score ?? 48;
-  const trend = currentScore ? getTrendLabel(currentScore.trend) : "Stable";
+  const trend = currentScore ? getTrendLabel(currentScore.trend, t) : t("trend.stable");
 
   return (
     <div className={cn("relative min-h-[420px] overflow-hidden p-4 lg:p-8", className)}>

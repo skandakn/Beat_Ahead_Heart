@@ -26,7 +26,21 @@ export function getISILabel(score: number): string {
   return "Higher observed trend";
 }
 
-export function getTrendLabel(trend: "increasing" | "decreasing" | "stable"): string {
+export function getTrendLabel(
+  trend: "increasing" | "decreasing" | "stable",
+  t?: ((key: any) => string)
+): string {
+  if (t) {
+    switch (trend) {
+      case "increasing":
+        return t("trend.increasing");
+      case "decreasing":
+        return t("trend.decreasing");
+      default:
+        return t("trend.stable");
+    }
+  }
+  // Fallback for non-i18n usage
   switch (trend) {
     case "increasing":
       return "Increasing";
