@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   // state carries the returnTo page set in /api/google-fit/auth
   const returnTo = searchParams.get("state") ?? "/fitness";
   // Validate returnTo to only allow known pages (prevent open redirect)
-  const allowedPages = ["/fitness", "/rest", "/nutri-agent"];
+  const allowedPages = ["/fitness", "/rest", "/nutri-agent", "/vital-agent"];
   const safePage = allowedPages.includes(returnTo) ? returnTo : "/fitness";
 
   const clientId = process.env.GOOGLE_CLIENT_ID;

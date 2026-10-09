@@ -32,7 +32,7 @@ interface WellnessSnapshotProps {
 export function WellnessSnapshot({ onContext }: WellnessSnapshotProps) {
   // Read-only — zero computation, zero side-effects
   const { currentScore, currentSample, scenario } = useSimulation();
-  const { googleFitConnected, googleFitNutrition } = useSafeFitRest();
+  const { googleFitConnected, googleFitNutrition, googleFitAuthExpired } = useSafeFitRest();
 
   const score = currentScore?.score ?? 0;
   const trend = currentScore?.trend ?? "stable";
@@ -99,6 +99,12 @@ export function WellnessSnapshot({ onContext }: WellnessSnapshotProps) {
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                 Google Fit Synced
+              </span>
+            )}
+            {googleFitAuthExpired && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                Fit Session Expired
               </span>
             )}
             <span className="text-[10px] text-navy-500 capitalize rounded-full bg-navy-50 border border-navy-100 px-2 py-0.5">

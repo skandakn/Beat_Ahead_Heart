@@ -10,21 +10,35 @@ interface SystemStatusPanelProps {
 
 export function SystemStatusPanel({ compact }: SystemStatusPanelProps) {
   const { systemStatus } = useSimulation();
-  const [gfitSynced, setGfitSynced] = useState(false);
+  const [gfitStatus, setGfitStatus] = useState<"synced" | "expired" | "none">("none");
 
   useEffect(() => {
     try {
       const hasToken = !!localStorage.getItem("beatahead-gfit-token");
-      setGfitSynced(hasToken);
+      const isExpired = localStorage.getItem("beatahead-gfit-auth-expired") === "true";
+      if (hasToken && isExpired) {
+        setGfitStatus("expired");
+      } else if (hasToken) {
+        setGfitStatus("synced");
+      } else {
+        setGfitStatus("none");
+      }
     } catch {}
   }, []);
+
+  const dataSyncLabel =
+    gfitStatus === "expired"
+      ? "Google Fit (expired)"
+      : gfitStatus === "synced"
+      ? "Google Fit (synced)"
+      : systemStatus.dataSync;
 
   const items = [
     { label: "AI Engine", status: systemStatus.aiEngine },
     { label: "ISI Engine", status: systemStatus.isiEngine },
     {
       label: "Data Sync",
-      status: gfitSynced ? "Google Fit (synced)" : systemStatus.dataSync,
+      status: dataSyncLabel,
     },
   ];
 
@@ -34,7 +48,21 @@ export function SystemStatusPanel({ compact }: SystemStatusPanelProps) {
     status === "active" ||
     status === "connected" ||
     status === "standby" ||
-    status.includes("synced");
+    (status.includes("synced") && !status.includes("expired"));
+
+  const isWarning = (status: string) => status.includes("expired");
+
+  const getStatusColor = (status: string) => {
+    if (isWarning(status)) return "text-amber-600";
+    if (isOnline(status)) return "text-emerald-600";
+    return "text-navy-400";
+  };
+
+  const getDotColor = (status: string) => {
+    if (isWarning(status)) return "bg-amber-500";
+    if (isOnline(status)) return "bg-emerald-500";
+    return "bg-navy-300";
+  };
 
   if (compact) {
     return (
@@ -43,8 +71,8 @@ export function SystemStatusPanel({ compact }: SystemStatusPanelProps) {
         {items.slice(0, 3).map((item) => (
           <div key={item.label} className="flex items-center justify-between text-[10px]">
             <span className="text-navy-500">{item.label}</span>
-            <span className={cn("flex items-center gap-1", isOnline(item.status) ? "text-emerald-600" : "text-navy-400")}>
-              <span className={cn("w-1.5 h-1.5 rounded-full", isOnline(item.status) ? "bg-emerald-500" : "bg-navy-300")} />
+            <span className={cn("flex items-center gap-1", getStatusColor(item.status))}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", getDotColor(item.status))} />
               {item.status}
             </span>
           </div>
@@ -59,8 +87,8 @@ export function SystemStatusPanel({ compact }: SystemStatusPanelProps) {
       {items.map((item) => (
         <div key={item.label} className="flex items-center justify-between text-xs">
           <span className="text-navy-500">{item.label}</span>
-          <span className={cn("flex items-center gap-1.5 capitalize", isOnline(item.status) ? "text-emerald-600" : "text-navy-400")}>
-            <span className={cn("w-1.5 h-1.5 rounded-full", isOnline(item.status) ? "bg-emerald-500" : "bg-navy-300")} />
+          <span className={cn("flex items-center gap-1.5 capitalize", getStatusColor(item.status))}>
+            <span className={cn("w-1.5 h-1.5 rounded-full", getDotColor(item.status))} />
             {item.status}
           </span>
         </div>

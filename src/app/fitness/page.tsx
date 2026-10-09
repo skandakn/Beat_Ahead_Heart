@@ -8,14 +8,14 @@ import { FitnessReport } from "@/components/fitness/FitnessReport";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SimulatedBadge } from "@/components/layout/Toast";
-import { Dumbbell, Calendar, TrendingUp, Clock, Target, Activity, History, Award, CheckCircle2 } from "lucide-react";
+import { Dumbbell, Calendar, TrendingUp, Clock, Target, Activity, History, Award, CheckCircle2, AlertTriangle } from "lucide-react";
 import { EXERCISE_TYPE_LABELS } from "@/lib/fit-rest/types";
 import { cn } from "@/lib/utils";
 
 // ─── Inner page component (inside FitRestProvider) ────────────────────────────
 
 function FitnessPageInner() {
-  const { workoutHistory, fitnessProfile, recoveryState, googleFitConnected } = useFitRest();
+  const { workoutHistory, fitnessProfile, recoveryState, googleFitConnected, googleFitAuthExpired } = useFitRest();
 
   // Get today's or most recent workout
   const todaysWorkout = workoutHistory.length > 0 ? workoutHistory[0] : null;
@@ -433,21 +433,32 @@ function FitnessPageInner() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            {googleFitConnected ? (
+            {googleFitAuthExpired ? (
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            ) : googleFitConnected ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : (
               <Activity className="h-5 w-5 text-navy-600" />
             )}
             <h2 className="text-lg font-semibold text-navy-900">
-              {googleFitConnected ? "Google Fit Synced" : "Connect Google Fit"}
+              {googleFitAuthExpired
+                ? "Google Fit Session Expired"
+                : googleFitConnected
+                ? "Google Fit Synced"
+                : "Connect Google Fit"}
             </h2>
           </div>
-          {googleFitConnected && (
+          {googleFitAuthExpired ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-300 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              Reconnection Required
+            </span>
+          ) : googleFitConnected ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               Synced &bull; Activity Tracking Active
             </span>
-          )}
+          ) : null}
         </div>
         <div className="max-w-2xl">
           <GoogleFitSync />

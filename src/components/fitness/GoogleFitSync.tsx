@@ -151,10 +151,12 @@ const VARIANT_COPY: Record<
 export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVariant }) {
   const {
     googleFitConnected,
+    googleFitAuthExpired,
     googleFitLastSynced,
     googleFitSyncing,
     googleFitError,
     syncGoogleFit,
+    reconnectGoogleFit,
     disconnectGoogleFit,
     workoutHistory,
     sleepHistory,
@@ -195,11 +197,14 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
   const copy = VARIANT_COPY[variant];
   const gfitWorkoutCount = workoutHistory.filter((w) => w.id.startsWith("gfit_")).length;
   const gfitSleepCount = sleepHistory.filter((s) => s.id.startsWith("gfit_sleep_")).length;
+  const hasConnectedAccount = googleFitConnected || googleFitAuthExpired;
 
   return (
     <Card className={cn(
       "border transition-colors",
-      googleFitConnected
+      googleFitAuthExpired
+        ? "border-amber-300 bg-amber-50/20"
+        : googleFitConnected
         ? "border-emerald-200 bg-emerald-50/30"
         : "border-navy-200"
     )}>
@@ -207,22 +212,31 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
         <div className="flex items-center gap-2">
           <GoogleIcon className="h-5 w-5 shrink-0" />
           <CardTitle className="text-base">{copy.title}</CardTitle>
-          {googleFitConnected && (
+          {googleFitAuthExpired ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+              <AlertTriangle className="h-3 w-3 text-amber-600" />
+              Session Expired
+            </span>
+          ) : googleFitConnected ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Synced &amp; Active
             </span>
-          )}
+          ) : null}
         </div>
         <CardDescription>
-          {googleFitConnected ? copy.connectedDescription : copy.disconnectedDescription}
+          {googleFitAuthExpired
+            ? "Your Google Fit authorization has expired. Reconnect to resume live syncing of your latest health data."
+            : googleFitConnected
+            ? copy.connectedDescription
+            : copy.disconnectedDescription}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
 
-        {/* ── Connected state ────────────────────────────────────────── */}
-        {googleFitConnected ? (
+        {/* ── Connected or Expired Account state ──────────────────────── */}
+        {hasConnectedAccount ? (
           <>
             {/* ── 0. Vitals Variant: Display Heart Rate, Blood Pressure, SpO2, Heart Points ── */}
             {variant === "vitals" ? (
@@ -709,8 +723,42 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
               </div>
             )}
 
-            {/* Error banner with dismiss */}
-            {googleFitError && (
+            {/* Error or Expired Session Banner */}
+            {googleFitAuthExpired ? (
+              <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3.5 space-y-2.5 shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-amber-950">
+                      Google Fit Authorization Expired
+                    </p>
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      Google OAuth requires re-authorizing periodically for security (every 7 days in testing mode). Your existing health records remain safely loaded, but live sync is paused. Tap below to reconnect with Google:
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pl-8">
+                  <Button
+                    size="sm"
+                    onClick={reconnectGoogleFit}
+                    className="gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-xs shadow-xs"
+                  >
+                    <GoogleIcon className="h-3.5 w-3.5" />
+                    Reconnect Google Fit Now
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={disconnectGoogleFit}
+                    className="text-xs border-amber-300 text-amber-900 hover:bg-amber-100"
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : googleFitError ? (
               <div className="flex items-start justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
@@ -725,55 +773,83 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                   ✕
                 </button>
               </div>
-            )}
+            ) : null}
 
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                size="sm"
-                variant="default"
-                onClick={() => void handleSync()}
-                disabled={googleFitSyncing}
-                className={cn(
-                  "gap-1.5 transition-all duration-200",
-                  justSynced && "bg-emerald-600 hover:bg-emerald-700 text-white"
-                )}
-              >
-                {googleFitSyncing ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Syncing…
-                  </>
-                ) : justSynced ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                    Synced!
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Sync Now
-                  </>
-                )}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={disconnectGoogleFit}
-                disabled={googleFitSyncing}
-                className="gap-1.5 text-navy-500 hover:text-red-600 hover:border-red-300"
-              >
-                <Unplug className="h-3.5 w-3.5" />
-                Disconnect
-              </Button>
-              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-medium ml-auto">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                Google Fit is Synced
-              </span>
+              {googleFitAuthExpired ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={reconnectGoogleFit}
+                    className="gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-xs shadow-xs"
+                  >
+                    <GoogleIcon className="h-3.5 w-3.5" />
+                    Reconnect Google Fit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={disconnectGoogleFit}
+                    className="gap-1.5 text-navy-500 hover:text-red-600 hover:border-red-300 text-xs"
+                  >
+                    <Unplug className="h-3.5 w-3.5" />
+                    Disconnect
+                  </Button>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 font-semibold ml-auto">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    Re-authentication Required
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => void handleSync()}
+                    disabled={googleFitSyncing}
+                    className={cn(
+                      "gap-1.5 transition-all duration-200",
+                      justSynced && "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    )}
+                  >
+                    {googleFitSyncing ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        Syncing…
+                      </>
+                    ) : justSynced ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        Synced!
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Sync Now
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={disconnectGoogleFit}
+                    disabled={googleFitSyncing}
+                    className="gap-1.5 text-navy-500 hover:text-red-600 hover:border-red-300 text-xs"
+                  >
+                    <Unplug className="h-3.5 w-3.5" />
+                    Disconnect
+                  </Button>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-medium ml-auto">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    Google Fit is Synced
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Success note */}
-            {!googleFitError && googleFitLastSynced && (
+            {!googleFitAuthExpired && !googleFitError && googleFitLastSynced && (
               <div className="flex items-center gap-1.5 text-[11px] text-emerald-700">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                 {copy.successNote}

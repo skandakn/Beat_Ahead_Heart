@@ -65,12 +65,14 @@ interface FitRestContextValue {
 
   // Google Fit integration
   googleFitConnected: boolean;
+  googleFitAuthExpired: boolean;
   googleFitLastSynced: number | null;  // epoch ms
   googleFitSyncing: boolean;
   googleFitError: string | null;
   googleFitNutrition: GoogleFitNutritionData | null;
   googleFitVitals: GoogleFitVitalsData | null;
   syncGoogleFit: () => Promise<boolean>;
+  reconnectGoogleFit: () => void;
   disconnectGoogleFit: () => void;
   importPhoneSleepData: () => void;
   importPhoneNutritionData: () => void;
@@ -96,6 +98,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
 
   // ── Google Fit state ───────────────────────────────────────────────────────
   const [googleFitToken, setGoogleFitToken] = useState<GoogleFitToken | null>(null);
+  const [googleFitAuthExpired, setGoogleFitAuthExpired] = useState<boolean>(false);
   const [googleFitLastSynced, setGoogleFitLastSynced] = useState<number | null>(null);
   const [googleFitSyncing, setGoogleFitSyncing] = useState(false);
   const [googleFitError, setGoogleFitError] = useState<string | null>(null);
@@ -197,6 +200,11 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      const storedAuthExpired = localStorage.getItem("beatahead-gfit-auth-expired") === "true";
+      if (storedAuthExpired) {
+        setGoogleFitAuthExpired(true);
+      }
+
       // ── Load last synced timestamp ────────────────────────────────────────
       const lastSynced = localStorage.getItem(GFIT_SYNCED_KEY);
       if (lastSynced) {
@@ -213,7 +221,14 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
       const gfitError = urlParams.get("gfit_error");
 
       if (gfitError) {
-        setGoogleFitError(decodeURIComponent(gfitError));
+        const decoded = decodeURIComponent(gfitError);
+        setGoogleFitError(decoded);
+        if (decoded.toLowerCase().includes("denied") || decoded.toLowerCase().includes("invalid") || decoded.toLowerCase().includes("expired")) {
+          setGoogleFitAuthExpired(true);
+          try {
+            localStorage.setItem("beatahead-gfit-auth-expired", "true");
+          } catch {}
+        }
         // Clean URL
         const clean = window.location.pathname;
         window.history.replaceState({}, "", clean);
@@ -232,6 +247,10 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
           // Persist token
           localStorage.setItem(GFIT_TOKEN_KEY, JSON.stringify(parsed.token));
           setGoogleFitToken(parsed.token);
+          setGoogleFitAuthExpired(false);
+          try {
+            localStorage.removeItem("beatahead-gfit-auth-expired");
+          } catch {}
 
           // Persist last-synced
           localStorage.setItem(GFIT_SYNCED_KEY, String(parsed.synced_at));
@@ -440,11 +459,36 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         vitals?: GoogleFitVitalsData;
         token?: GoogleFitToken;
         error?: string;
+        code?: string;
       };
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error ?? `Sync failed (${res.status})`);
+        const errMsg = data.error ?? `Sync failed (${res.status})`;
+        const isAuthError =
+          res.status === 401 ||
+          data.code === "AUTH_EXPIRED" ||
+          errMsg.toLowerCase().includes("invalid_grant") ||
+          errMsg.toLowerCase().includes("expired") ||
+          errMsg.toLowerCase().includes("unauthorized") ||
+          errMsg.toLowerCase().includes("reconnect");
+
+        if (isAuthError) {
+          setGoogleFitAuthExpired(true);
+          try {
+            localStorage.setItem("beatahead-gfit-auth-expired", "true");
+          } catch {}
+          throw new Error(
+            "Your Google Fit authorization has expired. Please reconnect your account to continue syncing."
+          );
+        }
+        throw new Error(errMsg);
       }
+
+      // Sync succeeded — clear expired state
+      setGoogleFitAuthExpired(false);
+      try {
+        localStorage.removeItem("beatahead-gfit-auth-expired");
+      } catch {}
 
       const freshWorkouts: WorkoutSession[] = data.workouts ?? [];
 
@@ -584,9 +628,26 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
       const isTimeout =
         err instanceof Error &&
         (err.name === "TimeoutError" || err.message.toLowerCase().includes("timed out"));
+      const isAuthError =
+        err instanceof Error &&
+        (err.message.toLowerCase().includes("invalid_grant") ||
+          err.message.toLowerCase().includes("expired") ||
+          err.message.toLowerCase().includes("unauthorized") ||
+          err.message.toLowerCase().includes("reconnect") ||
+          err.message.toLowerCase().includes("auth"));
+
+      if (isAuthError) {
+        setGoogleFitAuthExpired(true);
+        try {
+          localStorage.setItem("beatahead-gfit-auth-expired", "true");
+        } catch {}
+      }
+
       setGoogleFitError(
         isTimeout
           ? "Sync request timed out. Please check your connection and tap Sync Now again."
+          : isAuthError
+          ? "Your Google Fit authorization has expired. Please reconnect your account to continue syncing."
           : err instanceof Error
           ? err.message
           : "Google Fit sync failed. Please try again."
@@ -604,10 +665,12 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     setGoogleFitLastSynced(null);
     setGoogleFitError(null);
     setGoogleFitNutrition(null);
+    setGoogleFitAuthExpired(false);
     try {
       localStorage.removeItem(GFIT_TOKEN_KEY);
       localStorage.removeItem(GFIT_SYNCED_KEY);
       localStorage.removeItem(STORAGE_KEYS.NUTRITION_HISTORY);
+      localStorage.removeItem("beatahead-gfit-auth-expired");
       // Remove only Google Fit imported workouts, keep manual entries
       setWorkoutHistory((prev) => {
         const manual = prev.filter((w) => !w.id.startsWith("gfit_"));
@@ -617,9 +680,13 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     } catch {/* ignore */}
   }, []);
 
-  // ── Derived: is Google Fit currently connected ────────────────────────────
+  const reconnectGoogleFit = useCallback(() => {
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "/fitness";
+    window.location.href = `/api/google-fit/auth?returnTo=${encodeURIComponent(currentPath)}`;
+  }, []);
 
-  const googleFitConnected = googleFitToken !== null;
+  // ── Derived: is Google Fit currently connected and valid ───────────────────
+  const googleFitConnected = googleFitToken !== null && !googleFitAuthExpired;
 
   // ── Context value ──────────────────────────────────────────────────────────
 
@@ -1125,12 +1192,14 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
 
     // Google Fit
     googleFitConnected,
+    googleFitAuthExpired,
     googleFitLastSynced,
     googleFitSyncing,
     googleFitError,
     googleFitNutrition,
     googleFitVitals,
     syncGoogleFit,
+    reconnectGoogleFit,
     disconnectGoogleFit,
     importPhoneSleepData,
     importPhoneNutritionData,

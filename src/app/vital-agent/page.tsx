@@ -8,10 +8,10 @@ import { VitalReport } from "@/components/vitals/VitalReport";
 import { VitalAIChat } from "@/components/vitals/VitalAIChat";
 import { SimulatedBadge } from "@/components/layout/Toast";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { HeartPulse, Activity, TrendingUp, FileText, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { HeartPulse, Activity, TrendingUp, FileText, ShieldCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 
 function VitalAgentPageInner() {
-  const { googleFitConnected } = useFitRest();
+  const { googleFitConnected, googleFitAuthExpired } = useFitRest();
 
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -36,21 +36,32 @@ function VitalAgentPageInner() {
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            {googleFitConnected ? (
+            {googleFitAuthExpired ? (
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            ) : googleFitConnected ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : (
               <Activity className="h-5 w-5 text-red-600" />
             )}
             <h2 className="text-lg font-semibold text-navy-900">
-              {googleFitConnected ? "Google Fit Synced" : "Google Fit Vitals Integration"}
+              {googleFitAuthExpired
+                ? "Google Fit Session Expired"
+                : googleFitConnected
+                ? "Google Fit Synced"
+                : "Google Fit Vitals Integration"}
             </h2>
           </div>
-          {googleFitConnected && (
+          {googleFitAuthExpired ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-300 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              Reconnection Required
+            </span>
+          ) : googleFitConnected ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               Synced &bull; Vitals Tracking Active
             </span>
-          )}
+          ) : null}
         </div>
         <GoogleFitSync variant="vitals" />
       </div>

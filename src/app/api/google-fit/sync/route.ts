@@ -60,7 +60,10 @@ export async function POST(request: Request) {
   if (isExpired) {
     if (!refresh_token) {
       return NextResponse.json(
-        { error: "Access token expired and no refresh_token available. Please reconnect Google Fit." },
+        {
+          error: "Your Google Fit session has expired. Please reconnect your Google account to resume syncing.",
+          code: "AUTH_EXPIRED",
+        },
         { status: 401 }
       );
     }
@@ -77,11 +80,24 @@ export async function POST(request: Request) {
         }),
       });
 
-      const refreshData = (await refreshRes.json()) as TokenRefreshResponse;
+      const refreshData = (await refreshRes.json()) as TokenRefreshResponse & {
+        error_description?: string;
+      };
 
       if (refreshData.error) {
+        const isAuthExpired =
+          refreshData.error === "invalid_grant" ||
+          refreshData.error === "unauthorized_client" ||
+          refreshData.error_description?.toLowerCase().includes("expired") ||
+          refreshData.error_description?.toLowerCase().includes("revoked");
+
         return NextResponse.json(
-          { error: `Token refresh failed: ${refreshData.error}` },
+          {
+            error: isAuthExpired
+              ? "Your Google Fit authorization has expired. Please reconnect your account to continue syncing."
+              : `Token refresh failed: ${refreshData.error}`,
+            code: isAuthExpired ? "AUTH_EXPIRED" : "REFRESH_FAILED",
+          },
           { status: 401 }
         );
       }
@@ -141,7 +157,10 @@ export async function POST(request: Request) {
     String(sessionsRes.reason?.message).includes("401_UNAUTHORIZED")
   ) {
     return NextResponse.json(
-      { error: "Google Fit session expired. Please reconnect your account." },
+      {
+        error: "Your Google Fit authorization has expired. Please reconnect your account to continue syncing.",
+        code: "AUTH_EXPIRED",
+      },
       { status: 401 }
     );
   }

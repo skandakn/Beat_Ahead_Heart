@@ -13,7 +13,7 @@ import { DailyPlan } from "@/components/nutri/DailyPlan";
 import { SmartRecommendations } from "@/components/nutri/SmartRecommendations";
 import { NutriReport } from "@/components/nutri/NutriReport";
 import { GoogleFitSync } from "@/components/fitness/GoogleFitSync";
-import { Sparkles, FileText, Activity, CheckCircle2 } from "lucide-react";
+import { Sparkles, FileText, Activity, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useFitRest } from "@/lib/fit-rest/FitRestContext";
 import type { NutriISIContext } from "@/lib/nutri/types";
 
@@ -21,7 +21,7 @@ import type { NutriISIContext } from "@/lib/nutri/types";
 
 function NutriAgentInner() {
   const [isiContext, setISIContext] = useState<NutriISIContext | null>(null);
-  const { googleFitConnected, googleFitNutrition } = useFitRest();
+  const { googleFitConnected, googleFitAuthExpired, googleFitNutrition } = useFitRest();
 
   // useCallback with [] — setISIContext is stable from useState, so this reference
   // never changes. Prevents WellnessSnapshot's useEffect from re-firing every render.
@@ -50,21 +50,32 @@ function NutriAgentInner() {
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            {googleFitConnected ? (
+            {googleFitAuthExpired ? (
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            ) : googleFitConnected ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : (
               <Activity className="h-5 w-5 text-navy-600" />
             )}
             <h2 className="text-lg font-semibold text-navy-900">
-              {googleFitConnected ? "Google Fit Synced" : "Connect Google Fit"}
+              {googleFitAuthExpired
+                ? "Google Fit Session Expired"
+                : googleFitConnected
+                ? "Google Fit Synced"
+                : "Connect Google Fit"}
             </h2>
           </div>
-          {googleFitConnected && (
+          {googleFitAuthExpired ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-300 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              Reconnection Required
+            </span>
+          ) : googleFitConnected ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               Synced &bull; {Math.round(googleFitNutrition?.today?.calories ?? 0).toLocaleString()} kcal Active
             </span>
-          )}
+          ) : null}
         </div>
         <GoogleFitSync variant="nutri" />
       </div>
