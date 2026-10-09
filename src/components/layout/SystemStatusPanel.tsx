@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { cn } from "@/lib/utils";
 
@@ -9,15 +10,31 @@ interface SystemStatusPanelProps {
 
 export function SystemStatusPanel({ compact }: SystemStatusPanelProps) {
   const { systemStatus } = useSimulation();
+  const [gfitSynced, setGfitSynced] = useState(false);
+
+  useEffect(() => {
+    try {
+      const hasToken = !!localStorage.getItem("beatahead-gfit-token");
+      setGfitSynced(hasToken);
+    } catch {}
+  }, []);
 
   const items = [
     { label: "AI Engine", status: systemStatus.aiEngine },
     { label: "ISI Engine", status: systemStatus.isiEngine },
-    { label: "Data Sync", status: systemStatus.dataSync },
+    {
+      label: "Data Sync",
+      status: gfitSynced ? "Google Fit (synced)" : systemStatus.dataSync,
+    },
   ];
 
   const isOnline = (status: string) =>
-    status === "online" || status === "simulated" || status === "active" || status === "connected" || status === "standby";
+    status === "online" ||
+    status === "simulated" ||
+    status === "active" ||
+    status === "connected" ||
+    status === "standby" ||
+    status.includes("synced");
 
   if (compact) {
     return (

@@ -208,9 +208,9 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
           <GoogleIcon className="h-5 w-5 shrink-0" />
           <CardTitle className="text-base">{copy.title}</CardTitle>
           {googleFitConnected && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Connected
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Synced &amp; Active
             </span>
           )}
         </div>
@@ -436,75 +436,122 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
             ) : variant === "nutri" ? (
               <div className="space-y-3">
                 {/* 4 Macro & Calorie Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {/* Calories */}
-                  <div className="rounded-lg border border-orange-100 bg-white p-3 shadow-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
-                        Calories
-                      </p>
-                      <Flame className="h-4 w-4 text-orange-500" />
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-navy-900">
-                        {Math.round(googleFitNutrition?.today?.calories ?? 0).toLocaleString()}
-                      </span>
-                      <span className="text-xs text-navy-400 font-medium">kcal</span>
-                    </div>
-                    <p className="text-[10px] text-navy-400 mt-0.5">Today&apos;s intake</p>
-                  </div>
+                {(() => {
+                  const calories = Math.round(googleFitNutrition?.today?.calories ?? 0);
+                  const rawProtein = Math.round(googleFitNutrition?.today?.protein ?? 0);
+                  const rawCarbs = Math.round(googleFitNutrition?.today?.carbs ?? 0);
+                  const rawFat = Math.round(googleFitNutrition?.today?.fat ?? 0);
+                  const isEstimated = calories > 0 && rawProtein === 0 && rawCarbs === 0 && rawFat === 0;
+                  const protein = isEstimated ? Math.round((calories * 0.20) / 4) : rawProtein;
+                  const carbs = isEstimated ? Math.round((calories * 0.50) / 4) : rawCarbs;
+                  const fat = isEstimated ? Math.round((calories * 0.30) / 9) : rawFat;
 
-                  {/* Protein */}
-                  <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
-                        Protein
-                      </p>
-                      <Utensils className="h-3.5 w-3.5 text-emerald-600" />
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-emerald-700">
-                        {Math.round(googleFitNutrition?.today?.protein ?? 0)}
-                      </span>
-                      <span className="text-xs text-navy-400 font-medium">g</span>
-                    </div>
-                    <p className="text-[10px] text-navy-400 mt-0.5">Muscle &amp; repair</p>
-                  </div>
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {/* Calories */}
+                        <div className="rounded-lg border border-orange-100 bg-white p-3 shadow-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                              Calories
+                            </p>
+                            <Flame className="h-4 w-4 text-orange-500" />
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-navy-900">
+                              {calories.toLocaleString()}
+                            </span>
+                            <span className="text-xs text-navy-400 font-medium">kcal</span>
+                          </div>
+                          <p className="text-[10px] text-navy-400 mt-0.5">Today&apos;s intake</p>
+                        </div>
 
-                  {/* Carbs */}
-                  <div className="rounded-lg border border-amber-100 bg-white p-3 shadow-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
-                        Carbs
-                      </p>
-                      <Zap className="h-3.5 w-3.5 text-amber-500" />
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-amber-800">
-                        {Math.round(googleFitNutrition?.today?.carbs ?? 0)}
-                      </span>
-                      <span className="text-xs text-navy-400 font-medium">g</span>
-                    </div>
-                    <p className="text-[10px] text-navy-400 mt-0.5">Energy fuel</p>
-                  </div>
+                        {/* Protein */}
+                        <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                              Protein
+                            </p>
+                            <Utensils className="h-3.5 w-3.5 text-emerald-600" />
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-emerald-700">
+                              {protein}
+                            </span>
+                            <span className="text-xs text-navy-400 font-medium">g</span>
+                            {isEstimated && (
+                              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded">
+                                Est.
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-navy-400 mt-0.5">
+                            {isEstimated ? "Muscle & repair (20%)" : "Muscle & repair"}
+                          </p>
+                        </div>
 
-                  {/* Fats */}
-                  <div className="rounded-lg border border-blue-100 bg-white p-3 shadow-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
-                        Fats
-                      </p>
-                      <span className="text-xs font-semibold text-blue-500">Lipid</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-blue-800">
-                        {Math.round(googleFitNutrition?.today?.fat ?? 0)}
-                      </span>
-                      <span className="text-xs text-navy-400 font-medium">g</span>
-                    </div>
-                    <p className="text-[10px] text-navy-400 mt-0.5">Essential lipids</p>
-                  </div>
-                </div>
+                        {/* Carbs */}
+                        <div className="rounded-lg border border-amber-100 bg-white p-3 shadow-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                              Carbs
+                            </p>
+                            <Zap className="h-3.5 w-3.5 text-amber-500" />
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-amber-800">
+                              {carbs}
+                            </span>
+                            <span className="text-xs text-navy-400 font-medium">g</span>
+                            {isEstimated && (
+                              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
+                                Est.
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-navy-400 mt-0.5">
+                            {isEstimated ? "Energy fuel (50%)" : "Energy fuel"}
+                          </p>
+                        </div>
+
+                        {/* Fats */}
+                        <div className="rounded-lg border border-blue-100 bg-white p-3 shadow-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                              Fats
+                            </p>
+                            <span className="text-xs font-semibold text-blue-500">Lipid</span>
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-blue-800">
+                              {fat}
+                            </span>
+                            <span className="text-xs text-navy-400 font-medium">g</span>
+                            {isEstimated && (
+                              <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1 py-0.5 rounded">
+                                Est.
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-navy-400 mt-0.5">
+                            {isEstimated ? "Essential lipids (30%)" : "Essential lipids"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Informational banner when macros are estimated from total intake */}
+                      {isEstimated && (
+                        <div className="flex items-start gap-2 rounded-lg bg-emerald-50/80 border border-emerald-200 p-2.5 text-xs text-emerald-900">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div className="leading-relaxed">
+                            <span className="font-semibold">Google Fit Synced ({calories.toLocaleString()} kcal): </span>
+                            Estimated heart-healthy macronutrient distribution (20% Protein, 50% Carbs, 30% Fat) is applied because your Google Fit source logged total calories without separate macronutrient tags.
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Sub-row: Sync metadata & micronutrients */}
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/70 border border-emerald-100 px-3 py-2 text-xs">
@@ -549,17 +596,17 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-2 px-1">
-                    <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Active Google Fit dietary tracking
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      Google Fit dietary tracking active ({googleFitNutrition?.totalMealsCount ?? 0} meal events)
                     </span>
                     <button
                       type="button"
                       onClick={importPhoneNutritionData}
-                      className="text-[11px] text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                      className="text-[11px] text-navy-500 hover:text-navy-800 underline underline-offset-2"
                     >
-                      Re-sync 2,150 kcal Phone Data
+                      Load Sample Phone Intake (2,150 kcal)
                     </button>
                   </div>
                 )}
@@ -719,6 +766,10 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                 <Unplug className="h-3.5 w-3.5" />
                 Disconnect
               </Button>
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-medium ml-auto">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                Google Fit is Synced
+              </span>
             </div>
 
             {/* Success note */}

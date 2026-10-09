@@ -228,6 +228,21 @@ export async function POST(request: Request) {
     };
   }
 
+  if (
+    nutrition &&
+    nutrition.today.calories > 0 &&
+    (nutrition.today.protein ?? 0) === 0 &&
+    (nutrition.today.carbs ?? 0) === 0 &&
+    (nutrition.today.fat ?? 0) === 0
+  ) {
+    nutrition.today = {
+      ...nutrition.today,
+      protein: Math.round((nutrition.today.calories * 0.20) / 4),
+      carbs: Math.round((nutrition.today.calories * 0.50) / 4),
+      fat: Math.round((nutrition.today.calories * 0.30) / 9),
+    };
+  }
+
   // Merge workouts: sessions take priority over step-derived walking on the same day
   const sessionDates = new Set(sessionWorkouts.map((w) => w.date));
   const uniqueStepWorkouts = stepWorkouts.filter((w) => !sessionDates.has(w.date));

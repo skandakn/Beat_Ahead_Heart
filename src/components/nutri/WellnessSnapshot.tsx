@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { cn, getISILabel, getTrendLabel, getQualityColor, getQualityLabel } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSafeFitRest } from "@/lib/fit-rest/FitRestContext";
 import {
   Heart,
   Activity,
@@ -14,6 +15,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  CheckCircle2,
+  Utensils,
 } from "lucide-react";
 import type { NutriISIContext } from "@/lib/nutri/types";
 
@@ -29,6 +32,7 @@ interface WellnessSnapshotProps {
 export function WellnessSnapshot({ onContext }: WellnessSnapshotProps) {
   // Read-only — zero computation, zero side-effects
   const { currentScore, currentSample, scenario } = useSimulation();
+  const { googleFitConnected, googleFitNutrition } = useSafeFitRest();
 
   const score = currentScore?.score ?? 0;
   const trend = currentScore?.trend ?? "stable";
@@ -90,9 +94,17 @@ export function WellnessSnapshot({ onContext }: WellnessSnapshotProps) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Personal Wellness Snapshot</CardTitle>
-          <span className="text-[10px] text-navy-500 capitalize rounded-full bg-navy-50 border border-navy-100 px-2 py-0.5">
-            {scenarioLabel}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {googleFitConnected && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                Google Fit Synced
+              </span>
+            )}
+            <span className="text-[10px] text-navy-500 capitalize rounded-full bg-navy-50 border border-navy-100 px-2 py-0.5">
+              {scenarioLabel}
+            </span>
+          </div>
         </div>
         <p className="text-[11px] text-navy-400">
           Research prototype data — not clinically validated
@@ -119,6 +131,24 @@ export function WellnessSnapshot({ onContext }: WellnessSnapshotProps) {
             <p className="text-[10px] text-navy-400 mt-1">out of 100</p>
           </div>
         </div>
+
+        {/* Synced Google Fit dietary intake banner */}
+        {googleFitConnected && (googleFitNutrition?.today?.calories ?? 0) > 0 && (
+          <div className="flex items-center justify-between rounded-lg bg-emerald-50/70 border border-emerald-200 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 text-emerald-800">
+              <Utensils className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="font-semibold">Synced Dietary Intake</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-navy-900">
+                {Math.round(googleFitNutrition?.today?.calories ?? 0).toLocaleString()} kcal
+              </span>
+              <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded">
+                Live Fit
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Vitals row */}
         <div className="grid grid-cols-3 gap-2">

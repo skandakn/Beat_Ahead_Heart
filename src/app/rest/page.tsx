@@ -1,6 +1,6 @@
 "use client";
 
-import { FitRestProvider } from "@/lib/fit-rest/FitRestContext";
+import { FitRestProvider, useFitRest } from "@/lib/fit-rest/FitRestContext";
 import { SleepOverview } from "@/components/fit-rest/SleepOverview";
 import { RecoveryStatus } from "@/components/fit-rest/RecoveryStatus";
 import { WindDownRoutine } from "@/components/fit-rest/WindDownRoutine";
@@ -9,11 +9,13 @@ import { RestAIChat } from "@/components/rest/RestAIChat";
 import { RestReport } from "@/components/rest/RestReport";
 import { GoogleFitSync } from "@/components/fitness/GoogleFitSync";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Moon, FileText, Activity } from "lucide-react";
+import { Moon, FileText, Activity, CheckCircle2 } from "lucide-react";
 
 // ─── Inner page component (inside FitRestProvider) ────────────────────────────
 
 function RestPageInner() {
+  const { googleFitConnected } = useFitRest();
+
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* ── Page header ───────────────────────────────────────────────── */}
@@ -30,11 +32,25 @@ function RestPageInner() {
         </p>
       </div>
 
-      {/* ── Connect Google Fit ──────────────────────────────────────────── */}
+      {/* ── Google Fit Integration ──────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-navy-600" />
-          <h2 className="text-lg font-semibold text-navy-900">Connect Google Fit</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {googleFitConnected ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            ) : (
+              <Activity className="h-5 w-5 text-navy-600" />
+            )}
+            <h2 className="text-lg font-semibold text-navy-900">
+              {googleFitConnected ? "Google Fit Synced" : "Connect Google Fit"}
+            </h2>
+          </div>
+          {googleFitConnected && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Synced &bull; Sleep Tracking Active
+            </span>
+          )}
         </div>
         <GoogleFitSync variant="rest" />
       </div>

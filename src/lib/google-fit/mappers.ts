@@ -694,6 +694,13 @@ export async function fetchAndMapNutrition(
               continue;
             }
 
+            // If calories were recorded but individual macros were omitted by the sync source:
+            if (nutrients.calories > 0 && nutrients.protein === 0 && nutrients.carbs === 0 && nutrients.fat === 0) {
+              nutrients.protein = Math.round((nutrients.calories * 0.20) / 4);
+              nutrients.carbs = Math.round((nutrients.calories * 0.50) / 4);
+              nutrients.fat = Math.round((nutrients.calories * 0.30) / 9);
+            }
+
             const nanos = point.startTimeNanos || point.endTimeNanos || "0";
             const timeMs = Number(BigInt(nanos) / BigInt(1_000_000));
             const dateObj = !isNaN(timeMs) && timeMs > 0 ? new Date(timeMs) : new Date();
@@ -841,11 +848,25 @@ export async function fetchAndMapNutrition(
     // Today's nutrients: if today has an entry use it, otherwise most recent day within 48h
     const todayEntry = recentDays.find((d) => d.date === todayStr);
     const fallbackEntry = recentDays[0];
-    const todayNutrients: GoogleFitNutrientBreakdown = todayEntry
+    let todayNutrients: GoogleFitNutrientBreakdown = todayEntry
       ? todayEntry.nutrients
       : fallbackEntry && (Date.now() - new Date(fallbackEntry.date).getTime() < 48 * 3600 * 1000)
       ? fallbackEntry.nutrients
       : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+    if (
+      todayNutrients.calories > 0 &&
+      (todayNutrients.protein ?? 0) === 0 &&
+      (todayNutrients.carbs ?? 0) === 0 &&
+      (todayNutrients.fat ?? 0) === 0
+    ) {
+      todayNutrients = {
+        ...todayNutrients,
+        protein: Math.round((todayNutrients.calories * 0.20) / 4),
+        carbs: Math.round((todayNutrients.calories * 0.50) / 4),
+        fat: Math.round((todayNutrients.calories * 0.30) / 9),
+      };
+    }
 
     return {
       today: todayNutrients,

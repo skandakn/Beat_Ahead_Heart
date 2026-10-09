@@ -13,13 +13,15 @@ import { DailyPlan } from "@/components/nutri/DailyPlan";
 import { SmartRecommendations } from "@/components/nutri/SmartRecommendations";
 import { NutriReport } from "@/components/nutri/NutriReport";
 import { GoogleFitSync } from "@/components/fitness/GoogleFitSync";
-import { Sparkles, FileText, Activity } from "lucide-react";
+import { Sparkles, FileText, Activity, CheckCircle2 } from "lucide-react";
+import { useFitRest } from "@/lib/fit-rest/FitRestContext";
 import type { NutriISIContext } from "@/lib/nutri/types";
 
 // ─── Inner page (inside NutriProvider) ───────────────────────────────────────
 
 function NutriAgentInner() {
   const [isiContext, setISIContext] = useState<NutriISIContext | null>(null);
+  const { googleFitConnected, googleFitNutrition } = useFitRest();
 
   // useCallback with [] — setISIContext is stable from useState, so this reference
   // never changes. Prevents WellnessSnapshot's useEffect from re-firing every render.
@@ -44,11 +46,25 @@ function NutriAgentInner() {
         </p>
       </div>
 
-      {/* ── Connect Google Fit ──────────────────────────────────────────── */}
+      {/* ── Google Fit Integration ──────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-navy-600" />
-          <h2 className="text-lg font-semibold text-navy-900">Connect Google Fit</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {googleFitConnected ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            ) : (
+              <Activity className="h-5 w-5 text-navy-600" />
+            )}
+            <h2 className="text-lg font-semibold text-navy-900">
+              {googleFitConnected ? "Google Fit Synced" : "Connect Google Fit"}
+            </h2>
+          </div>
+          {googleFitConnected && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Synced &bull; {Math.round(googleFitNutrition?.today?.calories ?? 0).toLocaleString()} kcal Active
+            </span>
+          )}
         </div>
         <GoogleFitSync variant="nutri" />
       </div>

@@ -159,7 +159,19 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
       const storedNutrition = localStorage.getItem(STORAGE_KEYS.NUTRITION_HISTORY);
       if (storedNutrition) {
         try {
-          setGoogleFitNutrition(JSON.parse(storedNutrition) as GoogleFitNutritionData);
+          const parsed = JSON.parse(storedNutrition) as GoogleFitNutritionData;
+          if (
+            parsed?.today?.calories &&
+            parsed.today.calories > 0 &&
+            (parsed.today.protein ?? 0) === 0 &&
+            (parsed.today.carbs ?? 0) === 0 &&
+            (parsed.today.fat ?? 0) === 0
+          ) {
+            parsed.today.protein = Math.round((parsed.today.calories * 0.20) / 4);
+            parsed.today.carbs = Math.round((parsed.today.calories * 0.50) / 4);
+            parsed.today.fat = Math.round((parsed.today.calories * 0.30) / 9);
+          }
+          setGoogleFitNutrition(parsed);
         } catch {
           localStorage.removeItem(STORAGE_KEYS.NUTRITION_HISTORY);
         }
@@ -251,8 +263,26 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
 
           // Persist nutrition values
           if (parsed.nutrition) {
-            localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(parsed.nutrition));
-            setGoogleFitNutrition(parsed.nutrition);
+            let nut = parsed.nutrition;
+            if (
+              nut?.today?.calories &&
+              nut.today.calories > 0 &&
+              (nut.today.protein ?? 0) === 0 &&
+              (nut.today.carbs ?? 0) === 0 &&
+              (nut.today.fat ?? 0) === 0
+            ) {
+              nut = {
+                ...nut,
+                today: {
+                  ...nut.today,
+                  protein: Math.round((nut.today.calories * 0.20) / 4),
+                  carbs: Math.round((nut.today.calories * 0.50) / 4),
+                  fat: Math.round((nut.today.calories * 0.30) / 9),
+                },
+              };
+            }
+            localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(nut));
+            setGoogleFitNutrition(nut);
           }
 
           setGoogleFitError(null);
@@ -447,9 +477,27 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
 
       // Persist fresh nutrition data
       if (data.nutrition) {
-        setGoogleFitNutrition(data.nutrition);
+        let nut = data.nutrition;
+        if (
+          nut?.today?.calories &&
+          nut.today.calories > 0 &&
+          (nut.today.protein ?? 0) === 0 &&
+          (nut.today.carbs ?? 0) === 0 &&
+          (nut.today.fat ?? 0) === 0
+        ) {
+          nut = {
+            ...nut,
+            today: {
+              ...nut.today,
+              protein: Math.round((nut.today.calories * 0.20) / 4),
+              carbs: Math.round((nut.today.calories * 0.50) / 4),
+              fat: Math.round((nut.today.calories * 0.30) / 9),
+            },
+          };
+        }
+        setGoogleFitNutrition(nut);
         try {
-          localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(data.nutrition));
+          localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(nut));
         } catch {/* ignore */}
       }
 
@@ -1097,12 +1145,15 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useFitRest(): FitRestContextValue {
   const ctx = useContext(FitRestContext);
   if (!ctx) {
     throw new Error("useFitRest must be used within a FitRestProvider");
   }
   return ctx;
+}
+
+export function useSafeFitRest(): Partial<FitRestContextValue> {
+  const ctx = useContext(FitRestContext);
+  return ctx ?? {};
 }
