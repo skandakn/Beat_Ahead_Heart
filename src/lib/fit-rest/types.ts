@@ -329,18 +329,18 @@ export interface GoogleFitOxygenSaturationReading {
 }
 
 export interface GoogleFitVitalsData {
-  currentHeartRate: number;
-  restingHeartRate: number;
-  minHeartRate: number;
-  maxHeartRate: number;
-  heartPoints: number; // Google Fit cardio points
-  bloodPressure: {
+  currentHeartRate?: number;
+  restingHeartRate?: number;
+  minHeartRate?: number;
+  maxHeartRate?: number;
+  heartPoints?: number; // Google Fit cardio points
+  bloodPressure?: {
     systolic: number;
     diastolic: number;
     category: "normal" | "elevated" | "high_stage_1" | "high_stage_2";
     lastRecorded: number;
   };
-  spo2: {
+  spo2?: {
     current: number;
     average: number;
     lastRecorded: number;

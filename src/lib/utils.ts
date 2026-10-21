@@ -20,7 +20,8 @@ export function formatDeviation(current: number, baseline: number): string {
   return `${sign}${deviation.toFixed(1)}%`;
 }
 
-export function getISILabel(score: number): string {
+export function getISILabel(score: number, state?: string): string {
+  if (state === "Insufficient Signal Quality") return "Insufficient Signal Quality";
   if (score <= 30) return "Lower observed trend";
   if (score <= 60) return "Intermediate observed trend";
   return "Higher observed trend";

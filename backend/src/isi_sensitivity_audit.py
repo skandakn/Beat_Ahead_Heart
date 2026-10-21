@@ -12,9 +12,12 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
 
 # ---------------------------------------------------------------------------
 # Core Constants from Phase 8 Specification

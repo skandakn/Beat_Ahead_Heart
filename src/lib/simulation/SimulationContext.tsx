@@ -34,6 +34,7 @@ import {
   resetSimulation,
 } from "@/lib/isi/simulation";
 import type { PatientRecord } from "@/lib/patient-record";
+import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
 
 interface SimulationData {
   samples: PhysiologicalSample[];
@@ -136,6 +137,8 @@ interface SimulationContextValue extends SimulationState {
   evaluateModel: () => Promise<void>;
   /** Re-fetches the health record and updates the ISI baseline. */
   refreshBaseline: () => Promise<void>;
+  /** Re-fetches the latest persisted ISI score from the shared backend across devices. */
+  refreshISIData: () => Promise<void>;
   /** The last fetched PatientRecord (null if not yet loaded). */
   healthRecord: PatientRecord | null;
 }
@@ -149,10 +152,24 @@ const DEFAULT_SETTINGS: SimulationSettings = {
 const SimulationContext = createContext<SimulationContextValue | null>(null);
 
 export function SimulationProvider({ children }: { children: React.ReactNode }) {
+  const { userId, user } = useBeatAheadAuth();
+  const effectiveUserId = userId || user?.id || "demo-user-1";
+
   const [scenario, setScenarioState] = useState<DemoScenario>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("beatahead-scenario");
-      if (saved && ["normal", "stress_event", "recovering", "persistent_rising", "motion_artifact"].includes(saved)) {
+      if (
+        saved &&
+        [
+          "normal",
+          "stress_event",
+          "recovering",
+          "persistent_rising",
+          "motion_artifact",
+          "elevated_risk",
+          "severe_risk",
+        ].includes(saved)
+      ) {
         return saved as DemoScenario;
       }
     }
@@ -163,7 +180,18 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     let initialScenario: DemoScenario = "normal";
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("beatahead-scenario");
-      if (saved && ["normal", "stress_event", "recovering", "persistent_rising", "motion_artifact"].includes(saved)) {
+      if (
+        saved &&
+        [
+          "normal",
+          "stress_event",
+          "recovering",
+          "persistent_rising",
+          "motion_artifact",
+          "elevated_risk",
+          "severe_risk",
+        ].includes(saved)
+      ) {
         initialScenario = saved as DemoScenario;
       }
     }
@@ -174,15 +202,122 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
   const [baseline, setBaseline] = useState<PersonalBaseline>(DEFAULT_BASELINE);
   const [healthRecord, setHealthRecord] = useState<PatientRecord | null>(null);
 
+  const persistISIData = useCallback(
+    async (
+      targetUserId: string,
+      score: ISIScore,
+      hist: ISIScore[],
+      curSample: PhysiologicalSample,
+      allSamples: PhysiologicalSample[],
+      activeBase: PersonalBaseline,
+      activeScen: DemoScenario
+    ) => {
+      try {
+        await fetch("/api/isi/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: targetUserId,
+            currentScore: score,
+            history: hist.slice(-60),
+            currentSample: curSample,
+            samples: allSamples.slice(-60),
+            baseline: activeBase,
+            scenario: activeScen,
+          }),
+        });
+      } catch (err) {
+        console.warn("[SimulationContext] Failed to persist ISI score:", err);
+      }
+    },
+    []
+  );
+
+  const fetchPersistedISIData = useCallback(
+    async (targetUserId: string): Promise<boolean> => {
+      try {
+        const res = await fetch(`/api/isi/score?userId=${encodeURIComponent(targetUserId)}`, {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const json = (await res.json()) as {
+            success?: boolean;
+            record?: {
+              currentScore: ISIScore;
+              history?: ISIScore[];
+              currentSample?: PhysiologicalSample;
+              samples?: PhysiologicalSample[];
+              baseline?: PersonalBaseline;
+              scenario?: DemoScenario;
+            };
+          };
+
+          if (json.success && json.record && json.record.currentScore) {
+            const rec = json.record;
+            const loadedBaseline = rec.baseline ?? DEFAULT_BASELINE;
+            const loadedScenario = rec.scenario ?? "normal";
+            const loadedScore = rec.currentScore;
+            const loadedHistory =
+              Array.isArray(rec.history) && rec.history.length > 0 ? rec.history : [loadedScore];
+            const loadedSample =
+              rec.currentSample ??
+              generateSample(loadedScenario, loadedScore.timestamp, loadedBaseline);
+            const loadedSamples =
+              Array.isArray(rec.samples) && rec.samples.length > 0 ? rec.samples : [loadedSample];
+            const loadedFeatures = extractFeatures(
+              loadedSample,
+              null,
+              loadedScenario,
+              loadedBaseline
+            );
+            const loadedMatrixA = extractMatrixAFeatures(
+              loadedSample,
+              null,
+              loadedScenario,
+              loadedHistory.length
+            );
+
+            setBaseline(loadedBaseline);
+            setScenarioState(loadedScenario);
+            setSimulationData({
+              samples: loadedSamples,
+              history: loadedHistory,
+              currentSample: loadedSample,
+              currentScore: loadedScore,
+              features: loadedFeatures,
+              matrixAFeatures: loadedMatrixA,
+              timeline: generateTimeline(loadedScenario),
+            });
+            setMatrixAFeatures(loadedMatrixA);
+            setModelProbability(loadedScore.modelProbability ?? null);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn("[SimulationContext] Failed to fetch persisted ISI data:", err);
+      }
+      return false;
+    },
+    []
+  );
+
+  const refreshISIData = useCallback(async () => {
+    await fetchPersistedISIData(effectiveUserId);
+  }, [fetchPersistedISIData, effectiveUserId]);
+
   const refreshBaseline = useCallback(async () => {
     try {
       let record: PatientRecord | null = null;
 
-      // 1. Check local storage for authoritative active record (instant on client & Vercel)
+      // 1. Check local storage first
       if (typeof window !== "undefined") {
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && key.startsWith("beatahead-patient-record")) {
+          if (
+            key &&
+            key.startsWith("beatahead-patient-record") &&
+            (key.includes(effectiveUserId) || key === "beatahead-patient-record-demo-user-1")
+          ) {
             try {
               const item = localStorage.getItem(key);
               if (item) {
@@ -206,9 +341,9 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
         }
       }
 
-      // 2. Fallback to API if not in local storage
+      // 2. Fetch from shared backend API with effectiveUserId
       if (!record) {
-        const res = await fetch("/api/patient-record");
+        const res = await fetch(`/api/patient-record?userId=${encodeURIComponent(effectiveUserId)}`);
         if (res.ok) {
           const apiData = await res.json();
           record = apiData.record || apiData;
@@ -220,8 +355,6 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
         const derived = deriveBaselineFromHealthRecord(record);
         setBaseline(derived);
 
-        // If the user has a healthy baseline (derived.isi <= 45) and has not explicitly chosen a stress simulation,
-        // keep the scenario as "normal" so the displayed ISI stays healthy (< 45).
         let activeScenario = scenario;
         if (typeof window !== "undefined") {
           const userChosenScenario = localStorage.getItem("beatahead-scenario");
@@ -231,18 +364,57 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           }
         }
 
-        // Directly recalculate the simulation scores with the user's vitals baseline
-        setSimulationData(buildSimulationData(activeScenario, modelProbabilityRef.current, derived));
+        const freshData = buildSimulationData(activeScenario, modelProbabilityRef.current, derived);
+        setSimulationData(freshData);
+        setMatrixAFeatures(freshData.matrixAFeatures);
+
+        // Persist newly derived baseline & score to shared store
+        persistISIData(
+          effectiveUserId,
+          freshData.currentScore,
+          freshData.history,
+          freshData.currentSample,
+          freshData.samples,
+          derived,
+          activeScenario
+        );
       }
     } catch {
-      // silently fall back to DEFAULT_BASELINE
+      // silently fall back
     }
-  }, [scenario]);
+  }, [scenario, effectiveUserId, persistISIData]);
 
-  // Fetch on mount
+  // Initial load: Fetch saved ISI score from backend for this account
   useEffect(() => {
-    refreshBaseline();
-  }, [refreshBaseline]);
+    let isCancelled = false;
+    async function initAccountData() {
+      const found = await fetchPersistedISIData(effectiveUserId);
+      if (isCancelled) return;
+      if (!found) {
+        // First initialization for this account: derive baseline and persist initial record
+        refreshBaseline();
+      }
+    }
+    initAccountData();
+    return () => {
+      isCancelled = true;
+    };
+  }, [effectiveUserId, fetchPersistedISIData, refreshBaseline]);
+
+  // Cross-device sync on tab visibility / focus
+  useEffect(() => {
+    const handleSync = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchPersistedISIData(effectiveUserId);
+      }
+    };
+    window.addEventListener("visibilitychange", handleSync);
+    window.addEventListener("focus", handleSync);
+    return () => {
+      window.removeEventListener("visibilitychange", handleSync);
+      window.removeEventListener("focus", handleSync);
+    };
+  }, [effectiveUserId, fetchPersistedISIData]);
 
   // Listen for storage changes and custom events when health record or vitals are updated
   useEffect(() => {
@@ -431,10 +603,23 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           localStorage.setItem("beatahead-scenario", newScenario);
         } catch {}
       }
-      initializeData(newScenario);
+      const data = buildSimulationData(newScenario, modelProbabilityRef.current, baseline);
+      setSimulationData(data);
+      setMatrixAFeatures(data.matrixAFeatures);
+      previousSampleRef.current = data.currentSample;
+      evaluateModel(data.matrixAFeatures);
+      persistISIData(
+        effectiveUserId,
+        data.currentScore,
+        data.history,
+        data.currentSample,
+        data.samples,
+        baseline,
+        newScenario
+      );
       showToast(`Scenario: ${newScenario.replace(/_/g, " ")}`);
     },
-    [showToast, initializeData]
+    [showToast, baseline, effectiveUserId, evaluateModel, persistISIData]
   );
 
   const startMonitoring = useCallback(() => setIsRunning(true), []);
@@ -486,6 +671,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     lastEvaluatedAt,
     evaluateModel,
     refreshBaseline,
+    refreshISIData,
     healthRecord,
   };
 
