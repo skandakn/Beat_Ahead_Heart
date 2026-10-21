@@ -5,7 +5,7 @@ import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useSubscription, isPremiumAccount } from "@/lib/subscription/SubscriptionContext";
 import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
 import { cn } from "@/lib/utils";
-import { X, Settings, ShieldCheck, CreditCard, Sparkles, Activity } from "lucide-react";
+import { X, Settings, ShieldCheck, Sparkles, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSelector } from "./LanguageSelector";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -22,11 +22,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { user } = useBeatAheadAuth();
   const isWhitelisted = isPremiumAccount(user?.email);
   const {
-    subscriptionStatus,
     demoMode,
     setDemoMode,
-    subscribeToPro,
-    setSubscriptionStatusState,
   } = useSubscription();
 
   if (!open) return null;
@@ -83,63 +80,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             )}
           </section>
 
-          {/* Section: Subscription Controls */}
-          <section className="rounded-xl border border-navy-200 bg-white p-4 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-navy-700" />
-                <h3 className="text-sm font-bold text-navy-900">Subscription Status</h3>
-              </div>
-              <span
-                className={cn(
-                  "px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider",
-                  (subscriptionStatus === "active" || isWhitelisted)
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                    : "bg-navy-100 text-navy-700"
-                )}
-              >
-                {isWhitelisted
-                  ? "PRO (COMPETITION ACCESS) ✓"
-                  : subscriptionStatus === "active"
-                  ? "PRO ✓"
-                  : "FREE USER"}
-              </span>
-            </div>
 
-            <p className="text-xs text-navy-500">
-              {isWhitelisted
-                ? "Permanent competition VIP status granted. All features fully unlocked for judges."
-                : "Real Razorpay Test Mode integration (₹599/month)."}
-            </p>
-
-            {isWhitelisted ? (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-medium">
-                ★ Permanent Competition Access active for <span className="font-bold">{user?.email}</span>. AI Insights, Personal Baseline, Trends, Clinician View, and Agents are permanently unlocked.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 pt-1">
-                {subscriptionStatus !== "active" ? (
-                  <Button
-                    onClick={subscribeToPro}
-                    size="sm"
-                    className="w-full bg-navy-900 hover:bg-navy-800 text-white gap-2"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    Subscribe for ₹599/month
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={() => setSubscriptionStatusState("inactive")}
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs text-red-600 border-red-200 hover:bg-red-50"
-                  >
-                    Simulate Subscription Cancellation
-                  </Button>
-                )}
-              </div>
-            )}
-          </section>
 
           {/* Section: Physiological Simulation Scenario */}
           <section className="rounded-xl border border-navy-200 bg-white p-4 space-y-3 shadow-xs">

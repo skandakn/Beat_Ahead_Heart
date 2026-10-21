@@ -292,7 +292,6 @@ export function AppHeader() {
     "/clinician": t("header.clinicianDashboard"),
     "/rapidcare": t("header.emergency"),
     "/emergency": t("header.emergency"),
-    "/pricing": t("header.pricingPlans"),
     "/methodology": t("nav.methodology"),
     "/about": t("header.aboutBeatAhead"),
   };

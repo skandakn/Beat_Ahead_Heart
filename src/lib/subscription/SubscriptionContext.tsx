@@ -26,12 +26,6 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | null>(null);
 
-declare global {
-  interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
 export const PREMIUM_ACCOUNTS = [
   "skandakn13@gmail.com",
   "schiru330@gmail.com",
@@ -39,29 +33,17 @@ export const PREMIUM_ACCOUNTS = [
 
 export function isPremiumAccount(email?: string | null): boolean {
   if (!email) return false;
-  const clean = email.trim().toLowerCase();
-  return PREMIUM_ACCOUNTS.some((e) => e.toLowerCase() === clean);
+  return true;
 }
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { userId, user, isLoaded: isUserLoaded } = useBeatAheadAuth();
-  const isWhitelisted = isPremiumAccount(user?.email);
 
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>(() =>
-    isWhitelisted ? "active" : "inactive"
-  );
-  const [demoMode, setDemoModeState] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(!isWhitelisted);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("active");
+  const [demoMode, setDemoModeState] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Auto-upgrade whitelisted premium accounts immediately
-  useEffect(() => {
-    if (isPremiumAccount(user?.email)) {
-      setSubscriptionStatus("active");
-      setIsLoading(false);
-    }
-  }, [user?.email]);
-
-  // Load demo mode from localStorage
+  // Load demo mode from localStorage if present
   useEffect(() => {
     try {
       const savedDemo = localStorage.getItem("beatahead-demo-mode");
@@ -73,35 +55,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // Fetch real subscription status from backend DB
   const refreshSubscriptionStatus = useCallback(async () => {
-    if (isPremiumAccount(user?.email)) {
-      setSubscriptionStatus("active");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : "";
-      const res = await fetch(`/api/subscription/status${emailQuery}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.subscriptionStatus) {
-          setSubscriptionStatus(data.subscriptionStatus);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch subscription status:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.email]);
-
-  useEffect(() => {
-    if (isUserLoaded) {
-      refreshSubscriptionStatus();
-    }
-  }, [isUserLoaded, userId, refreshSubscriptionStatus]);
+    setSubscriptionStatus("active");
+    setIsLoading(false);
+  }, []);
 
   const setDemoMode = (enabled: boolean) => {
     setDemoModeState(enabled);
@@ -116,132 +73,20 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     setDemoMode(!demoMode);
   };
 
+  // All features are unconditionally unlocked and accessible
   const canAccessFeature = useCallback(
-    (feature: FeatureId | string): boolean => {
-      // 1. Permanent access for competition whitelisted premium accounts
-      if (isPremiumAccount(user?.email)) return true;
-      // 2. Pro features unlocked if subscription is active
-      if (subscriptionStatus === "active") return true;
-      // 3. Pro features unlocked if Judge Demo Mode is ON
-      if (demoMode === true) return true;
-      return false;
+    (_feature: FeatureId | string): boolean => {
+      return true;
     },
-    [subscriptionStatus, demoMode, user?.email]
+    []
   );
 
   const setSubscriptionStatusState = async (status: SubscriptionStatus) => {
-    try {
-      const res = await fetch("/api/subscription/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        setSubscriptionStatus(status);
-      }
-    } catch (err) {
-      console.error("Error setting subscription state:", err);
-    }
-  };
-
-  // Helper to dynamically load Razorpay Checkout JS script
-  const loadRazorpayScript = (): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (typeof window !== "undefined" && window.Razorpay) {
-        return resolve(true);
-      }
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
+    setSubscriptionStatus(status);
   };
 
   const subscribeToPro = async () => {
-    try {
-      setIsLoading(true);
-      const isScriptLoaded = await loadRazorpayScript();
-
-      if (!isScriptLoaded) {
-        alert("Failed to load Razorpay SDK. Please check your internet connection.");
-        setIsLoading(false);
-        return;
-      }
-
-      // Step 1: Call backend to create Razorpay Order
-      const res = await fetch("/api/subscription/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const orderData = await res.json();
-
-      if (!res.ok || orderData.error) {
-        alert(`Order creation error: ${orderData.error || "Unable to process subscription"}`);
-        setIsLoading(false);
-        return;
-      }
-
-      // Step 2: Configure Razorpay Checkout modal
-      const options = {
-        key: orderData.keyId,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: "BeatAhead",
-        description: "BeatAhead Pro Subscription (₹599/month)",
-        order_id: orderData.orderId,
-        prefill: {
-          name: "Research Evaluator",
-          email: "evaluator@beatahead.ai",
-          contact: "9999999999",
-        },
-        theme: {
-          color: "#0F172A",
-        },
-        // Step 3: Callback when Razorpay payment is authorized by user
-        handler: async function (response: {
-          razorpay_payment_id: string;
-          razorpay_order_id: string;
-          razorpay_signature: string;
-        }) {
-          try {
-            // Step 4: Send to backend for HMAC signature verification & DB update
-            const verifyRes = await fetch("/api/subscription/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(response),
-            });
-
-            const verifyData = await verifyRes.json();
-
-            if (verifyRes.ok && verifyData.success) {
-              setSubscriptionStatus("active");
-              alert("🎉 BeatAhead Pro Subscription activated successfully!");
-            } else {
-              alert(`Verification failed: ${verifyData.error || "Signature invalid"}`);
-            }
-          } catch (e) {
-            console.error("Error during payment verification:", e);
-            alert("Payment completed but verification failed.");
-          } finally {
-            setIsLoading(false);
-          }
-        },
-        modal: {
-          ondismiss: function () {
-            setIsLoading(false);
-          },
-        },
-      };
-
-      const razorpayInstance = new window.Razorpay(options);
-      razorpayInstance.open();
-    } catch (err) {
-      console.error("Error initiating subscription:", err);
-      alert("Error initializing Razorpay subscription.");
-      setIsLoading(false);
-    }
+    setSubscriptionStatus("active");
   };
 
   return (

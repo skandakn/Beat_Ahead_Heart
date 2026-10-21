@@ -1,11 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useSubscription } from "@/lib/subscription/SubscriptionContext";
 import { NutriProvider } from "@/lib/nutri/NutriContext";
 import { FitRestProvider } from "@/lib/fit-rest/FitRestContext";
-
-import { Paywall } from "@/components/ui/Paywall";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { WellnessSnapshot } from "@/components/nutri/WellnessSnapshot";
 import { NutriChat } from "@/components/nutri/NutriChat";
@@ -125,55 +122,11 @@ function NutriAgentInner() {
 // ─── Page export (wraps inner in NutriProvider) ───────────────────────────────
 
 export default function NutriAgentPage() {
-  const { canAccessFeature, isLoading } = useSubscription();
-
-  // Wait for demoMode (localStorage) and subscriptionStatus (API) to resolve
-  // before evaluating access. Without this guard the page flashes the Paywall
-  // on the first render when demoMode is still false before the useEffect fires.
-  if (isLoading) {
-    return (
-      <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-4 animate-pulse">
-        <div className="h-8 w-52 rounded-xl bg-navy-100" />
-        <div className="h-4 w-80 rounded-xl bg-navy-50" />
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="h-72 rounded-2xl bg-navy-50" />
-          <div className="h-72 rounded-2xl bg-navy-50" />
-        </div>
-      </div>
-    );
-  }
-
-  const hasAccess = canAccessFeature("AI_INSIGHTS");
-
-  const content = (
+  return (
     <FitRestProvider>
       <NutriProvider>
         <NutriAgentInner />
       </NutriProvider>
     </FitRestProvider>
   );
-
-  if (!hasAccess) {
-    return (
-      <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-        <Paywall featureName="Nutri Agent — AI Wellness Nutrition">
-          {/* Blurred preview rendered inside Paywall */}
-          <FitRestProvider>
-            <NutriProvider>
-              <div className="p-4 lg:p-8 space-y-4 max-w-7xl mx-auto pointer-events-none">
-                <div className="h-8 w-48 bg-navy-100 rounded animate-pulse" />
-                <div className="h-4 w-72 bg-navy-50 rounded animate-pulse" />
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="h-64 rounded-xl bg-navy-50 animate-pulse" />
-                  <div className="h-64 rounded-xl bg-navy-50 animate-pulse" />
-                </div>
-              </div>
-            </NutriProvider>
-          </FitRestProvider>
-        </Paywall>
-      </div>
-    );
-  }
-
-  return content;
 }

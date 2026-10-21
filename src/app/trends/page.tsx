@@ -2,9 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
-import { useSubscription } from "@/lib/subscription/SubscriptionContext";
 import { useFitRest, FitRestProvider } from "@/lib/fit-rest/FitRestContext";
-import { Paywall } from "@/components/ui/Paywall";
 import { generateTrendData } from "@/lib/isi/simulation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -163,12 +161,9 @@ function interpolateValue(
 
 function TrendsPageInner() {
   const { scenario, timeline } = useSimulation();
-  const { canAccessFeature } = useSubscription();
   const { googleFitVitals, googleFitConnected } = useFitRest();
   const { t } = useI18n();
   const [filter, setFilter] = useState("24h");
-
-  const hasAccess = canAccessFeature("LONG_TERM_TRENDS");
 
   const hours = timeFilters.find((f) => f.id === filter)?.hours ?? 24;
   
@@ -259,16 +254,6 @@ function TrendsPageInner() {
       </Card>
     </div>
   );
-
-  if (!hasAccess) {
-    return (
-      <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-        <Paywall featureName="7-Day & 30-Day Long-Term Trends">
-          {content}
-        </Paywall>
-      </div>
-    );
-  }
 
   return content;
 }
