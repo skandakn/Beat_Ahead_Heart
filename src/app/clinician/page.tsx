@@ -1,10 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSubscription } from "@/lib/subscription/SubscriptionContext";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
-import { Paywall } from "@/components/ui/Paywall";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -32,7 +30,6 @@ import Link from "next/link";
 
 export default function ClinicianPage() {
   const { t } = useI18n();
-  const { canAccessFeature } = useSubscription();
   const { user } = useBeatAheadAuth();
   const {
     currentScore,
@@ -45,8 +42,6 @@ export default function ClinicianPage() {
 
   const [selectedId, setSelectedId] = useState<string>("USER_PRIMARY");
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-
-  const hasAccess = canAccessFeature("ADVANCED_ANALYTICS");
 
   // Construct user patient record from real user profile and live telemetry
   const userName = user?.fullName || "Skanda K N";
@@ -303,16 +298,6 @@ export default function ClinicianPage() {
       </div>
     </div>
   );
-
-  if (!hasAccess) {
-    return (
-      <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-        <Paywall featureName="Clinician Dashboard & Multi-Patient Analytics">
-          {content}
-        </Paywall>
-      </div>
-    );
-  }
 
   return content;
 }

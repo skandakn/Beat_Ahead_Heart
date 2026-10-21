@@ -16,7 +16,6 @@ export function LandingNav() {
   const links = [
     { href: "/rapidcare", label: t("nav.emergency") },
     { href: "/helpline", label: t("nav.helpline") },
-    { href: "/pricing", label: t("nav.pricing") },
     { href: "/methodology", label: t("nav.methodology") },
     { href: "/about", label: t("nav.about") },
   ];

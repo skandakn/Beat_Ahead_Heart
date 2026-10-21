@@ -10,7 +10,7 @@ import { ContributionBars } from "@/components/isi/ContributionBars";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useTour } from "@/lib/tour/TourContext";
 import Link from "next/link";
-import { Heart, PhoneCall, FileText, CreditCard, BookOpen, Info, Compass } from "lucide-react";
+import { Heart, PhoneCall, FileText, BookOpen, Info, Compass } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 
 export default function DashboardPage() {
@@ -108,13 +108,6 @@ export default function DashboardPage() {
               {t("dashboard.information")}
             </h3>
             <div className="space-y-2">
-              <Link
-                href="/pricing"
-                className="flex items-center gap-2 text-sm text-navy-600 hover:text-navy-900 transition-colors"
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                {t("nav.pricing")}
-              </Link>
               <Link
                 href="/methodology"
                 className="flex items-center gap-2 text-sm text-navy-600 hover:text-navy-900 transition-colors"
