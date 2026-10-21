@@ -5,6 +5,7 @@ import {
   PatientRecord,
   PatientRecordUpdate,
 } from "@/lib/patient-record";
+import type { UserISIScoreRecord } from "@/lib/isi/types";
 
 export interface UserSubscription {
   userId: string;
@@ -148,5 +149,86 @@ export function updatePatientRecord(userId: string, updates: PatientRecordUpdate
   const record: PatientRecord = { ...current, ...updates, userId, updatedAt: new Date().toISOString() };
   records[userId] = record;
   fs.writeFileSync(PATIENT_RECORD_FILE, JSON.stringify(records, null, 2), "utf-8");
+  return record;
+}
+
+const ISI_STORE_FILE = path.join(DATA_DIR, "isi-records.json");
+
+export function getUserISIScore(userId = "demo-user-1"): UserISIScoreRecord | null {
+  ensureDirectoryExists();
+  try {
+    if (fs.existsSync(ISI_STORE_FILE)) {
+      const records: Record<string, UserISIScoreRecord> = JSON.parse(
+        fs.readFileSync(ISI_STORE_FILE, "utf-8")
+      );
+      return records[userId] || null;
+    }
+  } catch (err) {
+    console.error("Error reading ISI store:", err);
+  }
+  return null;
+}
+
+export function saveUserISIScore(userId: string, data: Partial<UserISIScoreRecord>): UserISIScoreRecord {
+  ensureDirectoryExists();
+  let records: Record<string, UserISIScoreRecord> = {};
+  try {
+    if (fs.existsSync(ISI_STORE_FILE)) {
+      records = JSON.parse(fs.readFileSync(ISI_STORE_FILE, "utf-8"));
+    }
+  } catch {
+    records = {};
+  }
+  const existing = records[userId];
+  const record: UserISIScoreRecord = {
+    userId,
+    currentScore: data.currentScore ?? existing?.currentScore ?? {
+      timestamp: Date.now(),
+      score: 32,
+      rawScore: 32,
+      baseline: 32,
+      trend: "stable",
+      confidence: 95,
+      contributions: {
+        hrv: 0,
+        pulseMorphology: 0,
+        spo2Trend: 0,
+        ecg: 0,
+        motionArtifact: 0,
+        modelEvidence: 0,
+        autonomic: 0,
+        perfusion: 0,
+        trend: 0,
+      },
+      label: "Lower observed trend",
+      deviation: 0,
+      modelProbability: 0.005,
+      modelEvidence: 0.004,
+      modelAlert: false,
+      state: "Normal / Stable",
+      signalQuality: 0.95,
+      baselineStatus: "Established",
+      trendMomentum: 0,
+    },
+    history: data.history ?? existing?.history ?? [],
+    currentSample: data.currentSample ?? existing?.currentSample,
+    samples: data.samples ?? existing?.samples ?? [],
+    baseline: data.baseline ?? existing?.baseline ?? {
+      restingHR: 68,
+      hrv: 52,
+      spo2: 97,
+      pulseMorphology: 0.85,
+      ecgAmplitude: 0.8,
+      isi: 32,
+    },
+    scenario: data.scenario ?? existing?.scenario ?? "normal",
+    updatedAt: new Date().toISOString(),
+  };
+  records[userId] = record;
+  try {
+    fs.writeFileSync(ISI_STORE_FILE, JSON.stringify(records, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error writing ISI store:", err);
+  }
   return record;
 }

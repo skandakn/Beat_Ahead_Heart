@@ -18,6 +18,8 @@ const SCENARIO_SEEDS: Record<DemoScenario, number> = {
   recovering: 37,
   persistent_rising: 53,
   motion_artifact: 71,
+  elevated_risk: 89,
+  severe_risk: 97,
 };
 
 function seededNoise(base: number, channel: number, range: number = 0.08): number {
@@ -173,6 +175,48 @@ function getScenarioParams(scenario: DemoScenario, t: number, customBaseline?: P
       };
     }
 
+    case "elevated_risk": {
+      // Moderate autonomic and perfusion abnormalities
+      const hrElevation = 20.0 + Math.sin(t * 5) * 4;
+      const hrvDepression = 22.0 + Math.sin(t * 3) * 3;
+      return {
+        ppg: Math.max(0.1, basePpg * 0.55 + noise(1, 0.04)),
+        ecg: Math.max(0.1, baseEcg * 0.65 + noise(2, 0.05)),
+        spo2: Math.max(70, Math.min(95, baseSpo2 - 4.5 + noise(3, 0.06))),
+        imu: 0.12 + noise(4, 0.008),
+        heartRate: Math.max(35, baseHR + hrElevation + noise(5, 0.15)),
+        hrv: Math.max(12, baseHrv - hrvDepression + noise(6, 0.2)),
+        signalQuality: {
+          ppg: 91,
+          ecg: 89,
+          spo2: 92,
+          imu: 90,
+          overall: 90,
+        },
+      };
+    }
+
+    case "severe_risk": {
+      // Acute cardiac risk: severe tachycardia, collapsed HRV, profound desaturation
+      const hrElevation = 45.0 + Math.sin(t * 4) * 6;
+      const hrvDepression = 36.0;
+      return {
+        ppg: Math.max(0.06, basePpg * 0.28 + noise(1, 0.03)),
+        ecg: Math.max(0.08, baseEcg * 0.45 + noise(2, 0.04)),
+        spo2: Math.max(70, Math.min(90, baseSpo2 - 8.5 + noise(3, 0.05))),
+        imu: 0.15 + noise(4, 0.008),
+        heartRate: Math.max(35, baseHR + hrElevation + noise(5, 0.15)),
+        hrv: Math.max(8, baseHrv - hrvDepression + noise(6, 0.15)),
+        signalQuality: {
+          ppg: 88,
+          ecg: 86,
+          spo2: 89,
+          imu: 88,
+          overall: 88,
+        },
+      };
+    }
+
     default:
       return getScenarioParams("normal", t, customBaseline);
   }
@@ -186,7 +230,7 @@ export function generateWaveformPoints(
 ): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = [];
   const t = (seed ?? tickCounter) / 100;
-  const noiseBase = (seed ?? tickCounter) + SCENARIO_SEEDS[scenario];
+  const noiseBase = (seed ?? tickCounter) + (SCENARIO_SEEDS[scenario] ?? 11);
 
   for (let i = 0; i < pointCount; i++) {
     const phase = (i / pointCount) * Math.PI * 4;
@@ -222,7 +266,8 @@ export function generateWaveformPoints(
 
 export function generateTrendData(
   scenario: DemoScenario,
-  hours: number = 24
+  hours: number = 24,
+  customBaseline: PersonalBaseline = DEFAULT_BASELINE
 ): { time: string; isi: number; hrv: number; spo2: number; heartRate: number; motion: number }[] {
   const data = [];
   const points = hours === 24 ? 24 : hours === 168 ? 42 : 30;
@@ -230,13 +275,31 @@ export function generateTrendData(
 
   for (let i = 0; i < points; i++) {
     tickCounter = Math.floor((i / points) * 100);
-    const sample = generateSample(scenario, Date.now() - (points - i) * interval * 60000);
+    const sample = generateSample(scenario, Date.now() - (points - i) * interval * 60000, customBaseline);
     const hour = Math.floor((i * interval) / 60);
     const minute = Math.floor((i * interval) % 60);
 
+    const feat = extractFeatures(sample, null, scenario, customBaseline);
+    const computedScore = calculateISI({
+      features: feat,
+      baseline: customBaseline,
+      historicalScores: [],
+      scenario,
+      signalQuality: sample.signalQuality.overall,
+      timestamp: sample.timestamp,
+      rawSample: {
+        heartRate: sample.heartRate,
+        hrv: sample.hrv,
+        spo2: sample.spo2,
+        ppg: sample.ppg,
+        ecg: sample.ecg,
+        imu: sample.imu,
+      },
+    });
+
     data.push({
       time: `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`,
-      isi: Math.round(45 + (sample.heartRate - 68) * 0.8 + (50 - sample.hrv) * 0.3),
+      isi: computedScore.score,
       hrv: Math.round(sample.hrv),
       spo2: Math.round(sample.spo2 * 10) / 10,
       heartRate: Math.round(sample.heartRate),

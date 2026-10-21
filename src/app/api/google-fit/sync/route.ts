@@ -159,71 +159,13 @@ export async function POST(request: Request) {
   if (nutritionRes.status === "rejected") syncErrors.push("nutrition");
   if (vitalsRes.status === "rejected") syncErrors.push("vitals");
 
-  // Calibrated Nutrition Fallback:
-  // If the user's Google Cloud returns 0 logged meals (common when 3rd-party food trackers
-  // haven't pushed cloud records yet), supply the calibrated 2,150 kcal dietary profile.
-  const todayStr = new Date().toISOString().split("T")[0];
-  if (!nutrition || (nutrition.today.calories === 0 && nutrition.totalMealsCount === 0)) {
+  // Keep only genuine nutrition records returned by Google Fit
+  if (!nutrition) {
     nutrition = {
-      today: {
-        calories: 2150,
-        protein: 112,
-        carbs: 245,
-        fat: 68,
-        fiber: 32,
-        sugar: 38,
-        sodium: 1820,
-      },
-      recentDays: [
-        {
-          date: todayStr,
-          nutrients: {
-            calories: 2150,
-            protein: 112,
-            carbs: 245,
-            fat: 68,
-            fiber: 32,
-            sugar: 38,
-            sodium: 1820,
-          },
-          mealCount: 4,
-        },
-      ],
-      meals: [
-        {
-          id: `gfit_meal_b_${now}`,
-          date: todayStr,
-          time: "08:30",
-          mealType: "breakfast",
-          name: "Oatmeal with Almonds, Berries & Whey",
-          nutrients: { calories: 520, protein: 32, carbs: 68, fat: 14, fiber: 9, sugar: 12, sodium: 210 },
-        },
-        {
-          id: `gfit_meal_l_${now}`,
-          date: todayStr,
-          time: "13:15",
-          mealType: "lunch",
-          name: "Grilled Chicken Breast, Brown Rice & Broccoli",
-          nutrients: { calories: 680, protein: 44, carbs: 75, fat: 20, fiber: 8, sugar: 4, sodium: 580 },
-        },
-        {
-          id: `gfit_meal_s_${now}`,
-          date: todayStr,
-          time: "17:00",
-          mealType: "snack",
-          name: "Greek Yogurt with Chia Seeds & Walnuts",
-          nutrients: { calories: 280, protein: 18, carbs: 22, fat: 12, fiber: 6, sugar: 10, sodium: 90 },
-        },
-        {
-          id: `gfit_meal_d_${now}`,
-          date: todayStr,
-          time: "20:00",
-          mealType: "dinner",
-          name: "Baked Salmon, Roasted Sweet Potato & Steamed Asparagus",
-          nutrients: { calories: 670, protein: 38, carbs: 80, fat: 22, fiber: 9, sugar: 12, sodium: 940 },
-        },
-      ],
-      totalMealsCount: 4,
+      today: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+      recentDays: [],
+      meals: [],
+      totalMealsCount: 0,
       lastSynced: Date.now(),
     };
   }
