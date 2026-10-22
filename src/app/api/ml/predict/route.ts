@@ -153,7 +153,7 @@ function evaluateInProcessModel(cleanFeatures: Record<string, number>) {
 export async function GET() {
   if (ML_SERVICE_URL) {
     try {
-      const res = await fetch(`${ML_SERVICE_URL}/health`, {
+      const res = await fetch(new URL("/health", ML_SERVICE_URL), {
         method: "GET",
         cache: "no-store",
         headers: { "Accept": "application/json" }
@@ -255,7 +255,7 @@ export async function POST(request: Request) {
         headers["Authorization"] = `Bearer ${process.env.ML_SERVICE_AUTH_TOKEN}`;
       }
 
-      const res = await fetch(`${ML_SERVICE_URL}/predict`, {
+      const res = await fetch(new URL("/predict", ML_SERVICE_URL), {
         method: "POST",
         headers,
         body: JSON.stringify({ features: cleanFeatures }),
