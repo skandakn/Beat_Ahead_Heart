@@ -4,7 +4,6 @@ import "./globals.css";
 import { BeatAheadAuthProvider } from "@/lib/auth/ClerkAuthWrapper";
 import { SimulationProvider } from "@/lib/simulation/SimulationContext";
 import { SubscriptionProvider } from "@/lib/subscription/SubscriptionContext";
-import { DemoBanner } from "@/components/layout/DemoBanner";
 import { Sidebar, MobileNav } from "@/components/layout/Sidebar";
 import { AppContentWrapper } from "@/components/layout/AppContentWrapper";
 import { Toast } from "@/components/layout/Toast";
@@ -52,7 +51,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <TooltipProvider>
                   <TourProvider>
                     <GuidedTour />
-                    <DemoBanner />
                     <Sidebar />
                     <AppContentWrapper>{children}</AppContentWrapper>
                     <MobileNav />

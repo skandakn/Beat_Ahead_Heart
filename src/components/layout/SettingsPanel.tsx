@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
-import { useSubscription, isPremiumAccount } from "@/lib/subscription/SubscriptionContext";
-import { useBeatAheadAuth } from "@/lib/auth/ClerkAuthWrapper";
 import { cn } from "@/lib/utils";
-import { X, Settings, ShieldCheck, Sparkles, Activity } from "lucide-react";
+import { X, Settings, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSelector } from "./LanguageSelector";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -19,12 +17,6 @@ interface SettingsPanelProps {
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { t } = useI18n();
   const { settings, updateSettings, scenario, setScenario } = useSimulation();
-  const { user } = useBeatAheadAuth();
-  const isWhitelisted = isPremiumAccount(user?.email);
-  const {
-    demoMode,
-    setDemoMode,
-  } = useSubscription();
 
   if (!open) return null;
 
@@ -50,37 +42,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <p className="text-xs text-navy-500">{t("language.description")}</p>
             <LanguageSelector className="mt-1 border border-navy-200 px-3 py-1.5" />
           </section>
-
-          {/* Section: Prototype Controls & Judge Demo Mode */}
-          <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-amber-950">{t("demo.judgeModeTitle")}</h3>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={demoMode}
-                  onChange={(e) => setDemoMode(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-navy-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-navy-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
-              </label>
-            </div>
-            <p className="text-xs text-amber-800 leading-relaxed">
-              Enables all Pro features (AI Insights, Personal Baseline, Trends, Clinician Dashboard) for demonstration without requiring a real payment.
-            </p>
-            {demoMode ? (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-600 text-white text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5" /> {t("demo.judgeModeActive")}
-              </div>
-            ) : (
-              <span className="text-xs text-navy-500">{t("demo.judgeModeOff")}</span>
-            )}
-          </section>
-
-
 
           {/* Section: Physiological Simulation Scenario */}
           <section className="rounded-xl border border-navy-200 bg-white p-4 space-y-3 shadow-xs">

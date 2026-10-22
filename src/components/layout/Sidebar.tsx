@@ -337,27 +337,5 @@ export function AppHeader() {
 }
 
 function HeaderProStatusBadge() {
-  const { subscriptionStatus, demoMode } = useSubscription();
-
-  if (subscriptionStatus === "active") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-extrabold">
-        PRO ✓
-      </span>
-    );
-  }
-
-  if (demoMode) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold">
-        DEMO PRO ✓
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-navy-100 text-navy-700 text-xs font-medium">
-      FREE USER
-    </span>
-  );
+  return null;
 }
