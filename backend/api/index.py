@@ -9,3 +9,4 @@ if str(BACKEND_DIR) not in sys.path:
 from src.ml_service import MLServiceRequestHandler
 
 handler = MLServiceRequestHandler
+app = MLServiceRequestHandler

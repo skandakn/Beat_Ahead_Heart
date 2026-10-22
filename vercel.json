@@ -15,6 +15,7 @@
     },
     "backend": {
       "root": "backend",
+      "entrypoint": "api/index.py",
       "runtime": "python"
     }
   },
