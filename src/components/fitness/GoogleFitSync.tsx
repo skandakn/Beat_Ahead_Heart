@@ -430,10 +430,10 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                   <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 space-y-2">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-950">
                       <HeartPulse className="h-3.5 w-3.5 text-sky-600" />
-                      Phone Vitals Tracking Sync (7 Days Demo)
+                      Phone Vitals Tracking Sync (7 Days Data)
                     </div>
                     <p className="text-[11px] text-navy-600 leading-relaxed">
-                      Smart watch vitals can take time to sync to Google&apos;s cloud servers. Load 7 days of realistic heart rate and SpO2 data for Trends demonstration:
+                      Smart watch vitals can take time to sync to Google&apos;s cloud servers. Load 7 days of realistic heart rate and SpO2 data for Trends:
                     </p>
                     <Button
                       size="sm"
@@ -907,7 +907,7 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-navy-900 flex items-center gap-1.5">
                     <Zap className="h-3.5 w-3.5 text-amber-500" />
-                    Test Live ISI Score Dynamics (Demo Sync Presets)
+                    Test Live ISI Score Dynamics (Calibration Presets)
                   </p>
                   {presetFeedback && (
                     <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">

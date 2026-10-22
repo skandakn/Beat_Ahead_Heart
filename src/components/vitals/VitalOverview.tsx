@@ -188,7 +188,7 @@ export function VitalOverview() {
           </div>
         </div>
         <div className="text-xs font-semibold text-amber-900 bg-white/80 border border-amber-200 px-3 py-1.5 rounded-lg whitespace-nowrap self-start sm:self-auto">
-          {googleFitConnected ? "Google Fit Live Sync Active" : "Calibrated Demonstration Baseline"}
+          {googleFitConnected ? "Google Fit Live Sync Active" : "Calibrated Vitals Baseline"}
         </div>
       </div>
     </div>
