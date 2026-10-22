@@ -16,6 +16,11 @@
       "path": "models/model_metadata.json",
       "size_bytes": 5291,
       "sha256": "4215aa68ad49ab69c68d602822ee018b1521413b977cc0aabbb7eba51eeb78a2"
+    },
+    "beatahead_phase5_model.json": {
+      "path": "models/beatahead_phase5_model.json",
+      "size_bytes": 181708,
+      "sha256": "e42d9dad1860f6dc319ff581e2194242355010a8c847cbcf649ffbeb06520303"
     }
   }
 }

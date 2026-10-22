@@ -1,0 +1,13 @@
+# Exclude development, test, and non-runtime files from Vercel bundles
+backend/tests/
+backend/scripts/
+backend/evaluation/
+backend/pipelines/
+backend/docker/
+tests/
+.git/
+.github/
+*.log
+__pycache__/
+*.pyc
+.venv/
