@@ -115,10 +115,16 @@ export function computeAutonomicComponent(
   hr: number,
   hrBase: number,
   sdnn: number,
-  sdnnBase: number
+  sdnnBase: number,
+  ecgAvailable: boolean = true
 ): number {
+  if (!ecgAvailable || isNaN(hr) || hr <= 0) {
+    return 0.0;
+  }
   const fHr = Math.max(0.0, Math.min(1.0, (hr - hrBase) / 25.0));
-  const fHrv = sdnnBase > 0 ? Math.max(0.0, Math.min(1.0, (sdnnBase - sdnn) / (0.60 * sdnnBase))) : 0.0;
+  const fHrv = sdnnBase > 0 && !isNaN(sdnn) && sdnn > 0
+    ? Math.max(0.0, Math.min(1.0, (sdnnBase - sdnn) / (0.60 * sdnnBase)))
+    : 0.0;
   return 0.50 * fHr + 0.50 * fHrv;
 }
 
@@ -130,10 +136,19 @@ export function computePerfusionComponent(
   spo2Base: number,
   pat: number,
   patBase: number,
-  patValid: boolean
+  patValid: boolean,
+  spo2Available: boolean = true
 ): number {
+  const isSpo2Valid = spo2Available && !isNaN(spo2) && spo2 > 0;
+  if (!isSpo2Valid) {
+    // Missing SpO2: Rely solely on PAT if valid without manufacturing hypoxemia
+    if (patValid && patBase > 0 && !isNaN(pat) && pat > 0) {
+      return Math.max(0.0, Math.min(1.0, (patBase - pat) / 50.0));
+    }
+    return 0.0;
+  }
   const fSpo2 = Math.max(0.0, Math.min(1.0, (spo2Base - spo2) / 5.0));
-  if (patValid && patBase > 0) {
+  if (patValid && patBase > 0 && !isNaN(pat) && pat > 0) {
     const fPat = Math.max(0.0, Math.min(1.0, (patBase - pat) / 50.0));
     return 0.60 * fSpo2 + 0.40 * fPat;
   }
@@ -324,12 +339,14 @@ export function calculateCompositeISI(
     input.ecg.sdnn,
     baseline.sdnn
   );
+  const isSpo2Available = input.spo2.available !== false && !isNaN(input.spo2.current) && input.spo2.current > 0;
   const dPerf = computePerfusionComponent(
     input.spo2.current,
     baseline.spo2,
     input.pat.medianMs,
     baseline.pat,
-    isPatValid
+    isPatValid,
+    isSpo2Available
   );
   const mTrend = computeTrendMomentum(input.recentIsiHistory);
 

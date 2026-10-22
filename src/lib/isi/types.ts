@@ -3,7 +3,20 @@ export type DemoScenario =
   | "stress_event"
   | "recovering"
   | "persistent_rising"
-  | "motion_artifact";
+  | "motion_artifact"
+  | "elevated_risk"
+  | "severe_risk";
+
+export interface UserISIScoreRecord {
+  userId: string;
+  currentScore: ISIScore;
+  history: ISIScore[];
+  currentSample?: PhysiologicalSample;
+  samples?: PhysiologicalSample[];
+  baseline: PersonalBaseline;
+  scenario: DemoScenario;
+  updatedAt: string;
+}
 
 export type TrendDirection = "increasing" | "decreasing" | "stable";
 
@@ -167,9 +180,11 @@ export const ISI_RANGE_LABELS = {
 } as const;
 
 export const DEMO_SCENARIOS: { id: DemoScenario; label: string; description: string }[] = [
-  { id: "normal", label: "Normal", description: "ISI ~ 35-45, stable baseline" },
+  { id: "normal", label: "Normal", description: "ISI ~ 25-38, stable resting baseline" },
   { id: "stress_event", label: "Stress Event", description: "Model evidence & autonomic strain rise then recover" },
   { id: "recovering", label: "Recovering", description: "ISI gradually returning to baseline" },
   { id: "persistent_rising", label: "Persistent Rising Trend", description: "Model evidence and ISI gradually increase" },
   { id: "motion_artifact", label: "Motion Artifact", description: "Signal quality decreases, triggers quality gate" },
+  { id: "elevated_risk", label: "Elevated Risk", description: "Moderate autonomic/perfusion abnormalities, ISI ~ 55-70" },
+  { id: "severe_risk", label: "Severe Risk", description: "Strong acute cardiac risk indicators, ISI ~ 78-95" },
 ];

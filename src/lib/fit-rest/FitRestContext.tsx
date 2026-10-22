@@ -492,26 +492,40 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
 
       const freshWorkouts: WorkoutSession[] = data.workouts ?? [];
 
-      // Merge: keep non-gfit entries, replace all gfit_ entries with fresh data
+      // Merge & Deduplicate: keep non-gfit entries, replace all gfit_ entries with fresh data
       setWorkoutHistory((prev) => {
         const nonGfit = prev.filter((w) => !w.id.startsWith("gfit_"));
-        const merged = [...freshWorkouts, ...nonGfit].sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+        const seenIds = new Set<string>();
+        const merged: WorkoutSession[] = [];
+
+        for (const w of [...freshWorkouts, ...nonGfit]) {
+          if (!seenIds.has(w.id)) {
+            seenIds.add(w.id);
+            merged.push(w);
+          }
+        }
+        merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         try {
           localStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(merged));
         } catch {/* ignore */}
         return merged;
       });
 
-      // Merge sleep sessions: keep non-gfit sleep entries, replace gfit_ ones
+      // Merge & Deduplicate sleep sessions: keep non-gfit sleep entries, replace gfit_ ones
       const freshSleep: SleepSession[] = data.sleepSessions ?? [];
       if (freshSleep.length > 0) {
         setSleepHistory((prev) => {
           const nonGfit = prev.filter((s) => !s.id.startsWith("gfit_sleep_"));
-          const merged = [...freshSleep, ...nonGfit].sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-          );
+          const seenSleepIds = new Set<string>();
+          const merged: SleepSession[] = [];
+
+          for (const s of [...freshSleep, ...nonGfit]) {
+            if (!seenSleepIds.has(s.id)) {
+              seenSleepIds.add(s.id);
+              merged.push(s);
+            }
+          }
+          merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           try {
             localStorage.setItem(STORAGE_KEYS.SLEEP_HISTORY, JSON.stringify(merged));
           } catch {/* ignore */}
@@ -861,16 +875,16 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
   const importPhoneVitalsData = useCallback(() => {
     setGoogleFitError(null);
     const now = Date.now();
-    
+
     // Generate 168 hourly heart rate samples (7 days)
     // Circadian pattern: lower at night (60-65), higher during day (70-85)
     // Exercise spikes: 2-3 times per day
     const recentHeartRate: GoogleFitHeartRateSample[] = Array.from({ length: 168 }, (_, i) => {
       const timestamp = now - (168 - i) * 3600000; // Hourly backwards from now
-      
+
       // Time of day (0-23)
       const hourOfDay = new Date(timestamp).getHours();
-      
+
       // Base circadian rhythm
       let baseBpm = 68;
       if (hourOfDay >= 0 && hourOfDay < 6) baseBpm = 58;  // Deep sleep
@@ -878,48 +892,48 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
       else if (hourOfDay >= 9 && hourOfDay < 18) baseBpm = 72;  // Daytime
       else if (hourOfDay >= 18 && hourOfDay < 22) baseBpm = 70;  // Evening
       else baseBpm = 62;  // Pre-sleep
-      
+
       // Exercise spikes (2-3 per day)
       const isExerciseHour = (hourOfDay === 7 || hourOfDay === 17); // Morning/evening workout
       const exerciseBoost = isExerciseHour ? Math.random() * 30 + 20 : 0;
-      
+
       // Random variation
       const variation = (Math.random() - 0.5) * 8;
-      
+
       const bpm = Math.round(Math.max(50, Math.min(130, baseBpm + exerciseBoost + variation)));
-      
+
       return {
         timestamp,
         bpm,
         resting: bpm <= 75,
       };
     });
-    
+
     // Generate 42 SpO2 samples (every 4 hours for 7 days)
     const recentSpO2: GoogleFitOxygenSaturationReading[] = Array.from({ length: 42 }, (_, i) => {
       const timestamp = now - (42 - i) * 4 * 3600000; // Every 4 hours
-      
+
       // Realistic SpO2: 96-99%, slight dips during sleep
       const hourOfDay = new Date(timestamp).getHours();
       const isSleep = hourOfDay >= 0 && hourOfDay < 6;
       const baseSpO2 = isSleep ? 96.5 : 98;
       const variation = (Math.random() - 0.5) * 1.5;
-      
+
       return {
         timestamp,
         percentage: Math.round((baseSpO2 + variation) * 10) / 10,
       };
     });
-    
+
     // Calculate aggregate statistics from generated data
     const allBpms = recentHeartRate.map(r => r.bpm);
     const avgBpm = Math.round(allBpms.reduce((a, b) => a + b, 0) / allBpms.length);
     const minBpm = Math.min(...allBpms);
     const maxBpm = Math.max(...allBpms);
     const restingBpm = Math.round(recentHeartRate.filter(r => r.resting).map(r => r.bpm).reduce((a, b) => a + b, 0) / recentHeartRate.filter(r => r.resting).length);
-    
+
     const avgSpO2 = Math.round((recentSpO2.reduce((a, b) => a + b.percentage, 0) / recentSpO2.length) * 10) / 10;
-    
+
     const phoneVitals: GoogleFitVitalsData = {
       currentHeartRate: recentHeartRate[recentHeartRate.length - 1].bpm,
       restingHeartRate: restingBpm,
@@ -947,12 +961,12 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
       source: "demo",
       lastSynced: now,
     };
-    
+
     setGoogleFitVitals(phoneVitals);
     try {
       localStorage.setItem(STORAGE_KEYS.VITALS_HISTORY, JSON.stringify(phoneVitals));
     } catch {}
-    
+
     const syncedAt = Date.now();
     setGoogleFitLastSynced(syncedAt);
     try {
@@ -1060,7 +1074,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         recentHeartRate: [{ timestamp: now, bpm: 64, resting: true }],
         recentBloodPressure: [{ timestamp: now, systolic: 116, diastolic: 74, category: "normal" }],
         recentSpO2: [{ timestamp: now, percentage: 99 }],
-        source: "google_fit",
+        source: "demo",
         lastSynced: now,
       };
       exerciseFreq = "active";
@@ -1085,7 +1099,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         recentHeartRate: [{ timestamp: now, bpm: 104, resting: false }],
         recentBloodPressure: [{ timestamp: now, systolic: 164, diastolic: 102, category: "high_stage_2" }],
         recentSpO2: [{ timestamp: now, percentage: 91 }],
-        source: "google_fit",
+        source: "demo",
         lastSynced: now,
       };
       exerciseFreq = "light";
@@ -1111,7 +1125,7 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         recentHeartRate: [{ timestamp: now, bpm: 74, resting: true }],
         recentBloodPressure: [{ timestamp: now, systolic: 124, diastolic: 80, category: "high_stage_1" }],
         recentSpO2: [{ timestamp: now, percentage: 97 }],
-        source: "google_fit",
+        source: "demo",
         lastSynced: now,
       };
       exerciseFreq = "moderate";
@@ -1120,7 +1134,6 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
     setGoogleFitVitals(vitalsPreset);
     try {
       localStorage.setItem(STORAGE_KEYS.VITALS_HISTORY, JSON.stringify(vitalsPreset));
-      localStorage.setItem(GFIT_SYNCED_KEY, String(now));
     } catch {}
     setGoogleFitLastSynced(now);
 
@@ -1132,11 +1145,11 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
         if (key && key.startsWith("beatahead-patient-record")) {
           try {
             const currentRec = JSON.parse(localStorage.getItem(key) || "{}");
-            currentRec.restingHeartRate = vitalsPreset.restingHeartRate;
-            currentRec.systolicBP = vitalsPreset.bloodPressure.systolic;
-            currentRec.diastolicBP = vitalsPreset.bloodPressure.diastolic;
-            currentRec.bloodPressureCategory = vitalsPreset.bloodPressure.category;
-            currentRec.spo2 = vitalsPreset.spo2.current;
+            currentRec.restingHeartRate = vitalsPreset.restingHeartRate ?? currentRec.restingHeartRate;
+            currentRec.systolicBP = vitalsPreset.bloodPressure?.systolic ?? currentRec.systolicBP;
+            currentRec.diastolicBP = vitalsPreset.bloodPressure?.diastolic ?? currentRec.diastolicBP;
+            currentRec.bloodPressureCategory = vitalsPreset.bloodPressure?.category ?? currentRec.bloodPressureCategory;
+            currentRec.spo2 = vitalsPreset.spo2?.current ?? currentRec.spo2;
             currentRec.exerciseFrequency = exerciseFreq;
             currentRec.updatedAt = new Date().toISOString();
             currentRec.vitalsHistory = upsertDailyVitalsEntry(currentRec.vitalsHistory, {
@@ -1157,11 +1170,11 @@ export function FitRestProvider({ children }: { children: React.ReactNode }) {
       if (!recordFound) {
         try {
           const defaultRec = createEmptyPatientRecord("demo-user-1");
-          defaultRec.restingHeartRate = vitalsPreset.restingHeartRate;
-          defaultRec.systolicBP = vitalsPreset.bloodPressure.systolic;
-          defaultRec.diastolicBP = vitalsPreset.bloodPressure.diastolic;
-          defaultRec.bloodPressureCategory = vitalsPreset.bloodPressure.category;
-          defaultRec.spo2 = vitalsPreset.spo2.current;
+          defaultRec.restingHeartRate = vitalsPreset.restingHeartRate ?? null;
+          defaultRec.systolicBP = vitalsPreset.bloodPressure?.systolic ?? null;
+          defaultRec.diastolicBP = vitalsPreset.bloodPressure?.diastolic ?? null;
+          defaultRec.bloodPressureCategory = vitalsPreset.bloodPressure?.category ?? "";
+          defaultRec.spo2 = vitalsPreset.spo2?.current ?? null;
           defaultRec.exerciseFrequency = exerciseFreq;
           defaultRec.updatedAt = new Date().toISOString();
           localStorage.setItem("beatahead-patient-record-demo-user-1", JSON.stringify(defaultRec));

@@ -57,6 +57,10 @@ function getSimulatedModelProbability(scenario: DemoScenario, tickCount: number)
       return Math.max(0.005, 0.20 - t * 0.18);
     case "motion_artifact":
       return 0.05 + Math.sin(t * 3) * 0.03;
+    case "elevated_risk":
+      return Math.min(0.48, Math.max(0.24, 0.28 + Math.sin(t * 2) * 0.03));
+    case "severe_risk":
+      return Math.min(0.92, Math.max(0.72, 0.80 + Math.sin(t * 1.5) * 0.03));
     default:
       return 0.01;
   }
@@ -75,11 +79,37 @@ export function calculateISI(input: ScoringInput): ISIScore {
   const motionIntensity = rawSample?.imu ? Math.abs(rawSample.imu) : features.imu.motionIntensity;
   const ppgVal = rawSample?.ppg ?? 0.85;
 
-  const modelProb = (input.modelProbability !== undefined && input.modelProbability !== null)
-    ? input.modelProbability
-    : getSimulatedModelProbability(scenario, historicalScores.length);
+  let modelProb: number;
+  if (input.modelProbability !== undefined && input.modelProbability !== null) {
+    modelProb = input.modelProbability;
+  } else if (
+    scenario === "normal" ||
+    scenario === "stress_event" ||
+    scenario === "recovering" ||
+    scenario === "persistent_rising" ||
+    scenario === "motion_artifact" ||
+    scenario === "elevated_risk" ||
+    scenario === "severe_risk"
+  ) {
+    modelProb = getSimulatedModelProbability(scenario, historicalScores.length);
+  } else {
+    // Custom test scenario without explicit model probability: infer from physiological strain
+    const hrStrain = Math.max(0, (hr - baseline.restingHR) / 30.0);
+    const spo2Strain = Math.max(0, (baseline.spo2 - spo2) / 6.0);
+    const hrvStrain = baseline.hrv > 0 ? Math.max(0, (baseline.hrv - sdnn) / baseline.hrv) : 0;
+    const combinedStrain = hrStrain * 0.45 + spo2Strain * 0.35 + hrvStrain * 0.20;
+    if (combinedStrain >= 0.70) {
+      modelProb = 0.80;
+    } else if (combinedStrain >= 0.30) {
+      modelProb = 0.30;
+    } else {
+      modelProb = 0.006;
+    }
+  }
+
   const sqNormalized = signalQuality > 1.0 ? signalQuality / 100.0 : signalQuality;
   const isPatValid = scenario !== "motion_artifact" && (signalQuality >= 60 || (signalQuality <= 1.0 && signalQuality >= 0.60));
+  const isSpo2Available = !isNaN(spo2) && spo2 > 0;
 
   const engineInput: EngineInput = {
     modelProbability: modelProb,
@@ -98,7 +128,7 @@ export function calculateISI(input: ScoringInput): ISIScore {
     },
     spo2: {
       current: spo2,
-      available: true,
+      available: isSpo2Available,
     },
     imu: {
       motionIntensity: motionIntensity,
@@ -143,7 +173,7 @@ export function calculateISI(input: ScoringInput): ISIScore {
     trend,
     confidence,
     contributions,
-    label: getISILabel(output.isi),
+    label: getISILabel(output.isi, output.state),
     deviation: output.isi - Math.round(baseline.isi),
     modelProbability: output.modelProbability,
     modelEvidence: output.components.modelEvidence,
