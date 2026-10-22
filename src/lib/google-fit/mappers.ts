@@ -894,7 +894,7 @@ export async function fetchAndMapVitals(
   accessToken: string,
   startMs: number,
   endMs: number
-): Promise<GoogleFitVitalsData> {
+): Promise<GoogleFitVitalsData | null> {
   const now = Date.now();
   const vitalsStart = Math.max(startMs, now - 14 * 86400000); // 14 days of vitals
 
@@ -996,28 +996,25 @@ export async function fetchAndMapVitals(
   }
 
   // If real hardware sensor readings exist, assemble and return them
-  if (realHeartRates.length > 0 || realBloodPressures.length > 0) {
+  if (realHeartRates.length > 0 || realBloodPressures.length > 0 || realSpO2s.length > 0) {
     realHeartRates.sort((a, b) => b.timestamp - a.timestamp);
     realBloodPressures.sort((a, b) => b.timestamp - a.timestamp);
     realSpO2s.sort((a, b) => b.timestamp - a.timestamp);
 
-    const bpLatest = realBloodPressures[0] || {
-      systolic: 118,
-      diastolic: 76,
-      category: "normal" as const,
-      timestamp: now,
-    };
+    const bpLatest = realBloodPressures.length > 0 ? realBloodPressures[0] : undefined;
 
     const bpms = realHeartRates.map((r) => r.bpm);
-    const avgBpm = bpms.length ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : 68;
-    const minBpm = bpms.length ? Math.min(...bpms) : 58;
-    const maxBpm = bpms.length ? Math.max(...bpms) : 108;
-    const restingBpm = bpms.length ? Math.round(bpms.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, bpms.length)) : 68;
+    const avgBpm = bpms.length ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : undefined;
+    const minBpm = bpms.length ? Math.min(...bpms) : undefined;
+    const maxBpm = bpms.length ? Math.max(...bpms) : undefined;
+    const restingBpm = bpms.length
+      ? Math.round(bpms.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, bpms.length))
+      : undefined;
 
-    const spo2Latest = realSpO2s[0]?.percentage ?? 98;
+    const spo2Latest = realSpO2s[0]?.percentage;
     const spo2Avg = realSpO2s.length
       ? Math.round((realSpO2s.reduce((a, b) => a + b.percentage, 0) / realSpO2s.length) * 10) / 10
-      : 98;
+      : undefined;
 
     return {
       currentHeartRate: realHeartRates[0]?.bpm ?? avgBpm,
@@ -1025,17 +1022,22 @@ export async function fetchAndMapVitals(
       minHeartRate: minBpm,
       maxHeartRate: maxBpm,
       heartPoints: realHeartPoints,
-      bloodPressure: {
-        systolic: bpLatest.systolic,
-        diastolic: bpLatest.diastolic,
-        category: bpLatest.category,
-        lastRecorded: bpLatest.timestamp,
-      },
-      spo2: {
-        current: spo2Latest,
-        average: spo2Avg,
-        lastRecorded: realSpO2s[0]?.timestamp ?? now,
-      },
+      bloodPressure: bpLatest
+        ? {
+            systolic: bpLatest.systolic,
+            diastolic: bpLatest.diastolic,
+            category: bpLatest.category,
+            lastRecorded: bpLatest.timestamp,
+          }
+        : undefined,
+      spo2:
+        spo2Latest !== undefined && spo2Avg !== undefined
+          ? {
+              current: spo2Latest,
+              average: spo2Avg,
+              lastRecorded: realSpO2s[0]?.timestamp ?? now,
+            }
+          : undefined,
       recentHeartRate: realHeartRates.slice(0, 500),
       recentBloodPressure: realBloodPressures.slice(0, 10),
       recentSpO2: realSpO2s.slice(0, 200),
@@ -1044,52 +1046,8 @@ export async function fetchAndMapVitals(
     };
   }
 
-  // Calibrated healthy adult fallback when Google Fit account has no connected smart watch/cuff
-  const fallbackHeartRateHistory: GoogleFitHeartRateSample[] = Array.from({ length: 12 }, (_, i) => {
-    const time = now - (11 - i) * 2 * 3600 * 1000;
-    const bpm = Math.round(66 + Math.sin(i * 0.8) * 8 + (i % 3 === 0 ? 12 : 0));
-    return {
-      timestamp: time,
-      bpm,
-      resting: bpm <= 72,
-    };
-  });
-
-  const fallbackBPHistory: GoogleFitBloodPressureReading[] = [
-    { timestamp: now - 3 * 86400000, systolic: 118, diastolic: 76, category: "normal" },
-    { timestamp: now - 2 * 86400000, systolic: 120, diastolic: 78, category: "normal" },
-    { timestamp: now - 86400000, systolic: 116, diastolic: 74, category: "normal" },
-    { timestamp: now - 3600000, systolic: 118, diastolic: 76, category: "normal" },
-  ];
-
-  const fallbackSpO2History: GoogleFitOxygenSaturationReading[] = [
-    { timestamp: now - 2 * 86400000, percentage: 98.2 },
-    { timestamp: now - 86400000, percentage: 98.0 },
-    { timestamp: now - 3600000, percentage: 98.5 },
-  ];
-
-  return {
-    currentHeartRate: 70,
-    restingHeartRate: 68,
-    minHeartRate: 58,
-    maxHeartRate: 112,
-    heartPoints: 48,
-    bloodPressure: {
-      systolic: 118,
-      diastolic: 76,
-      category: "normal",
-      lastRecorded: now - 3600000,
-    },
-    spo2: {
-      current: 98.5,
-      average: 98.2,
-      lastRecorded: now - 3600000,
-    },
-    recentHeartRate: fallbackHeartRateHistory,
-    recentBloodPressure: fallbackBPHistory,
-    recentSpO2: fallbackSpO2History,
-    source: "calibrated_baseline",
-    lastSynced: now,
-  };
+  // When Google Fit account has no connected smart watch, ECG cuff, or pulse oximeter records,
+  // return null rather than fabricating artificial physiological measurements.
+  return null;
 }
 

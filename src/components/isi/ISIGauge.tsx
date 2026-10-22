@@ -32,11 +32,13 @@ export function ISIGauge({
   const deviation = score - baseline;
 
   const productState = currentScore?.state ?? "Normal / Stable";
+  const isSignalDegraded = productState === "Insufficient Signal Quality";
 
   const circumference = 2 * Math.PI * 88;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
+  const strokeDashoffset = isSignalDegraded ? circumference : circumference - (score / 100) * circumference;
 
   const getScoreColor = (s: number) => {
+    if (isSignalDegraded) return "#94A3B8";
     if (s <= 30) return "#10B981";
     if (s <= 60) return "#F59E0B";
     return "#DC2626";
@@ -64,15 +66,15 @@ export function ISIGauge({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={cn("font-bold text-navy-900 font-mono", size === "lg" ? "text-5xl" : "text-3xl")}>
-            {score}
+            {isSignalDegraded ? "--" : score}
           </span>
           <span className="text-xs font-semibold tracking-wider text-navy-500 uppercase mt-0.5">
-            ISI: {score} / 100
+            {isSignalDegraded ? "Signal Degraded" : `ISI: ${score} / 100`}
           </span>
         </div>
       </div>
 
-      <p className="mt-2 text-sm font-semibold text-navy-800">{getISILabel(score)}</p>
+      <p className="mt-2 text-sm font-semibold text-navy-800">{getISILabel(score, productState)}</p>
       
       <span className="mt-1 text-[11px] font-medium text-navy-500 bg-navy-50 px-2 py-0.5 rounded-full border border-navy-100">
         {t("isi.gauge.status")}: {productState}
