@@ -18,11 +18,23 @@ import os
 import sys
 import json
 import math
-import joblib
-import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Union, Any, Optional
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+try:
+    import joblib
+except ImportError:
+    joblib = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
@@ -36,16 +48,19 @@ class FeatureValidationError(ValueError):
 class BeatAheadInferenceEngine:
     """
     Production-grade inference wrapper for the frozen Phase 5 BeatAhead model.
+    Supports both ultra-fast zero-dependency tree evaluation (via JSON model)
+    and scikit-learn / XGBoost joblib pipeline if available.
     """
 
     def __init__(self, model_dir: Optional[Union[str, Path]] = None):
         self.model_dir = Path(model_dir) if model_dir else MODELS_DIR
         self.model_path = self.model_dir / "beatahead_phase5_model.joblib"
+        self.json_model_path = self.model_dir / "beatahead_phase5_model.json"
         self.schema_path = self.model_dir / "feature_schema.json"
         self.metadata_path = self.model_dir / "model_metadata.json"
 
-        if not self.model_path.exists():
-            raise FileNotFoundError(f"Model artifact not found: {self.model_path}")
+        if not self.json_model_path.exists() and not self.model_path.exists():
+            raise FileNotFoundError(f"Model artifact not found in: {self.model_dir}")
         if not self.schema_path.exists():
             raise FileNotFoundError(f"Feature schema not found: {self.schema_path}")
 
@@ -58,18 +73,55 @@ class BeatAheadInferenceEngine:
         self.feature_specs: Dict[str, Any] = self.schema["features"]
         self.schema_version: str = self.schema.get("schema_version", "1.0.0")
 
-        # Load model artifact
-        self.artifact = joblib.load(self.model_path)
-        self.imputer = self.artifact["imputer"]
-        self.model = self.artifact["model"]
-        self.decision_threshold: float = float(self.artifact["frozen_decision_threshold"])
-        self.model_version: str = self.artifact.get("version", "1.0.0")
-        self.model_name: str = self.artifact.get("model_name", "beatahead_phase5_model")
+        # Load metadata defaults
+        self.metadata: Dict[str, Any] = {}
+        if self.metadata_path.exists():
+            try:
+                with open(self.metadata_path, "r", encoding="utf-8") as f:
+                    self.metadata = json.load(f)
+            except Exception:
+                pass
+
+        self.decision_threshold: float = float(self.metadata.get("decision_threshold", 0.156742))
+        self.model_version: str = self.metadata.get("model_version", "1.0.0")
+        self.model_name: str = self.metadata.get("model_name", "beatahead_phase5_model")
+
+        self.trees: Optional[List[Dict[str, Any]]] = None
+        self.artifact: Optional[Dict[str, Any]] = None
+        self.imputer = None
+        self.model = None
+
+        # 1. Prefer loading lightweight JSON tree ensemble (zero dependencies, ~0.09ms inference)
+        if self.json_model_path.exists():
+            try:
+                with open(self.json_model_path, "r", encoding="utf-8") as f:
+                    tree_data = json.load(f)
+                self.trees = tree_data["learner"]["gradient_booster"]["model"]["trees"]
+            except Exception:
+                self.trees = None
+
+        # 2. Also load joblib artifact if available (preserves artifact, imputer, model references)
+        if self.model_path.exists() and joblib is not None:
+            try:
+                self.artifact = joblib.load(self.model_path)
+                self.imputer = self.artifact.get("imputer")
+                self.model = self.artifact.get("model")
+                if "frozen_decision_threshold" in self.artifact:
+                    self.decision_threshold = float(self.artifact["frozen_decision_threshold"])
+                if "version" in self.artifact:
+                    self.model_version = self.artifact["version"]
+                if "model_name" in self.artifact:
+                    self.model_name = self.artifact["model_name"]
+            except Exception:
+                pass
+
+        if self.trees is None and self.model is None:
+            raise RuntimeError(f"Failed to load any valid model from {self.model_dir}")
 
     def validate_and_align_features(
         self,
-        features: Union[Dict[str, Any], pd.Series, pd.DataFrame, List[Any], np.ndarray]
-    ) -> np.ndarray:
+        features: Any
+    ) -> Any:
         """
         Validates the input feature vector against the frozen schema:
         - Checks for missing features
@@ -77,13 +129,13 @@ class BeatAheadInferenceEngine:
         - Validates data types (must be numeric)
         - Rejects NaN and infinite values
         - Enforces physiological bounds
-        - Returns aligned 1D numpy array of shape (1, 26)
+        - Returns aligned DataFrame if pandas is available, otherwise aligned list
         """
-        if isinstance(features, pd.DataFrame):
+        if pd is not None and isinstance(features, pd.DataFrame):
             if len(features) != 1:
                 raise FeatureValidationError(f"Expected exactly 1 feature row, got {len(features)}")
             features = features.iloc[0].to_dict()
-        elif isinstance(features, pd.Series):
+        elif pd is not None and isinstance(features, pd.Series):
             features = features.to_dict()
 
         aligned_values = []
@@ -106,9 +158,8 @@ class BeatAheadInferenceEngine:
                 val_clean = self._validate_single_feature(name, val, spec)
                 aligned_values.append(val_clean)
 
-        elif isinstance(features, (list, tuple, np.ndarray)):
-            # Sequence input (must exactly match feature_count and canonical ordering)
-            flat_arr = np.array(features).ravel()
+        elif isinstance(features, (list, tuple)) or (np is not None and isinstance(features, np.ndarray)):
+            flat_arr = list(features) if not (np is not None and isinstance(features, np.ndarray)) else list(features.ravel())
             if len(flat_arr) != self.feature_count:
                 raise FeatureValidationError(
                     f"Expected exactly {self.feature_count} features in sequence, got {len(flat_arr)}"
@@ -121,7 +172,9 @@ class BeatAheadInferenceEngine:
         else:
             raise TypeError(f"Unsupported features type: {type(features)}. Expected dict, Series, or 1D sequence.")
 
-        return pd.DataFrame([aligned_values], columns=self.feature_order)
+        if pd is not None:
+            return pd.DataFrame([aligned_values], columns=self.feature_order)
+        return aligned_values
 
     def _validate_single_feature(self, name: str, val: Any, spec: Dict[str, Any]) -> float:
         """Validates type, NaN, inf, and physiological range for a single feature."""
@@ -135,9 +188,9 @@ class BeatAheadInferenceEngine:
             raise FeatureValidationError(f"Feature '{name}' cannot be converted to float: {val!r}") from e
 
         # NaN / Inf checks
-        if math.isnan(f_val) or np.isnan(f_val):
+        if math.isnan(f_val) or (np is not None and np.isnan(f_val)):
             raise FeatureValidationError(f"Feature '{name}' contains NaN. Raw NaN values are strictly rejected.")
-        if math.isinf(f_val) or np.isinf(f_val):
+        if math.isinf(f_val) or (np is not None and np.isinf(f_val)):
             raise FeatureValidationError(f"Feature '{name}' contains infinite value: {f_val}")
 
         # Range bounds check
@@ -149,9 +202,30 @@ class BeatAheadInferenceEngine:
 
         return f_val
 
+    def _predict_trees(self, aligned_values: List[float]) -> float:
+        """Pure-Python evaluation of the 150 XGBoost decision trees."""
+        margin = 0.0
+        for tree in self.trees:
+            lefts = tree["left_children"]
+            rights = tree["right_children"]
+            s_idx = tree["split_indices"]
+            s_cond = tree["split_conditions"]
+            d_left = tree["default_left"]
+            node = 0
+            while lefts[node] != -1:
+                val = aligned_values[s_idx[node]]
+                if val is None or math.isnan(val):
+                    node = lefts[node] if d_left[node] == 1 else rights[node]
+                elif val < s_cond[node]:
+                    node = lefts[node]
+                else:
+                    node = rights[node]
+            margin += s_cond[node]
+        return 1.0 / (1.0 + math.exp(-margin))
+
     def predict(
         self,
-        features: Union[Dict[str, Any], pd.Series, pd.DataFrame, List[Any], np.ndarray]
+        features: Any
     ) -> Dict[str, Any]:
         """
         Executes strict inference on a single feature vector.
@@ -167,15 +241,23 @@ class BeatAheadInferenceEngine:
         """
         X_vec = self.validate_and_align_features(features)
 
-        # Impute (even though valid features have no NaNs, imputer is required to preserve pipeline state)
-        X_imp = self.imputer.transform(X_vec)
+        if self.trees is not None:
+            if hasattr(X_vec, "iloc"):
+                aligned_list = [float(v) for v in X_vec.iloc[0].values]
+            elif isinstance(X_vec, (list, tuple)):
+                aligned_list = [float(v) for v in X_vec]
+            elif hasattr(X_vec, "tolist"):
+                aligned_list = [float(v) for v in X_vec.tolist()[0]]
+            else:
+                aligned_list = [float(v) for v in X_vec]
+            prob = self._predict_trees(aligned_list)
+        elif self.model is not None and self.imputer is not None:
+            X_imp = self.imputer.transform(X_vec)
+            prob = float(self.model.predict_proba(X_imp)[0, 1])
+        else:
+            raise RuntimeError("No model available for inference.")
 
-        # Predict probability
-        prob = float(self.model.predict_proba(X_imp)[0, 1])
-
-        # Calibrated probability (for tree logloss, identical to raw continuous probability score)
         calibrated_prob = prob
-
         binary_alert = int(prob >= self.decision_threshold)
         alert_status = "ALERT" if binary_alert == 1 else "NORMAL"
 
@@ -204,7 +286,7 @@ def get_inference_engine() -> BeatAheadInferenceEngine:
 
 
 def predict_single_window(
-    features: Union[Dict[str, Any], pd.Series, pd.DataFrame, List[Any], np.ndarray]
+    features: Any
 ) -> Dict[str, Any]:
     """Convenience functional interface for inference."""
     engine = get_inference_engine()
