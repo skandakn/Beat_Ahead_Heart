@@ -70,7 +70,8 @@ class MLServiceRequestHandler(BaseHTTPRequestHandler):
             self._send_json(401, {"error": "Unauthorized"})
             return
 
-        if self.path in ["/health", "/", "/api/health"]:
+        clean_path = self.path.split("?")[0].rstrip("/") or "/"
+        if clean_path in ["/health", "/", "/api/health", "/api", "/api/index"]:
             if INFERENCE_ENGINE is None:
                 self._send_json(503, {
                     "status": "unhealthy",
@@ -113,7 +114,8 @@ class MLServiceRequestHandler(BaseHTTPRequestHandler):
             self._send_json(401, {"error": "Unauthorized"})
             return
 
-        if self.path not in ["/predict", "/api/ml/predict"]:
+        clean_path = self.path.split("?")[0].rstrip("/") or "/"
+        if clean_path not in ["/predict", "/api/ml/predict", "/api/predict"]:
             self._send_json(404, {"error": "Endpoint not found"})
             return
 
