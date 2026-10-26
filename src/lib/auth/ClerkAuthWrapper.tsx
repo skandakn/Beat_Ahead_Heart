@@ -31,8 +31,12 @@ const BeatAheadAuthContext = createContext<BeatAheadAuthContextType>({
   signInDemoUser: () => {},
 });
 
+export const CLERK_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  "pk_test_cHJvdmVuLWhlbi00MDgyLmNsZXJrLmFjY291bnRzLmRldiQ";
+
 export function checkIsClerkConfigured(): boolean {
-  const pubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const pubKey = CLERK_PUBLISHABLE_KEY;
   if (!pubKey) return false;
   if (pubKey.includes("YOUR_") || pubKey.includes("placeholder")) return false;
   if (!pubKey.startsWith("pk_")) return false;
@@ -261,7 +265,7 @@ export function BeatAheadAuthProvider({ children }: { children: React.ReactNode 
 
   if (isConfigured) {
     return (
-      <ClerkProvider>
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
         <ClerkAuthBridge>{children}</ClerkAuthBridge>
       </ClerkProvider>
     );
