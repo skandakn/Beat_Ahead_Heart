@@ -41,9 +41,11 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = origin.includes("localhost")
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || new URL(request.url).host;
+  const isLocal = host.includes("localhost") || origin.includes("localhost");
+  const redirectUri = isLocal
     ? `${origin}/api/google-fit/callback`
-    : (process.env.GOOGLE_REDIRECT_URI || `${origin}/api/google-fit/callback`);
+    : (process.env.GOOGLE_REDIRECT_URI || `https://${host}/api/google-fit/callback`);
 
   // ── OAuth error from Google ────────────────────────────────────────────────
   if (error) {
