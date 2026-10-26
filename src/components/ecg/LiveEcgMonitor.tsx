@@ -76,6 +76,8 @@ export function LiveEcgMonitor() {
   const samplesSecCountRef = useRef<number>(0);
   const rPeakTimeRef = useRef<number>(Date.now());
   const audioContextRef = useRef<AudioContext | null>(null);
+  // Auto-baseline (exponential moving average for DC offset removal)
+  const baselineRef = useRef<number>(512); // starts at midpoint, adapts to real signal
 
   // Check Web Serial support & detect Brave
   useEffect(() => {
@@ -130,6 +132,8 @@ export function LiveEcgMonitor() {
       setPreset("arduino");
       setPortName("Arduino Uno (USB)");
       setShowTroubleshoot(false);
+      // Reset baseline so it adapts to real signal DC level
+      baselineRef.current = 512;
 
       isReadingRef.current = true;
       readSerialLoop(port);
@@ -384,11 +388,15 @@ export function LiveEcgMonitor() {
           const rawAdc = bufferRef.current.shift()!;
           const currentX = sweepXRef.current;
 
-          // Convert raw ADC (0-1023) to canvas Y
-          const centered = rawAdc - 512;
+          // Auto-baseline: exponential moving average tracks DC offset
+          // alpha=0.002 → ~500 sample time constant (~2s at 250Hz) — slow enough not to follow QRS
+          baselineRef.current = baselineRef.current * (1 - 0.002) + rawAdc * 0.002;
+
+          // Convert raw ADC to canvas Y using adaptive baseline (not fixed 512)
+          const centered = rawAdc - baselineRef.current;
           const invertedMultiplier = isInverted ? -1 : 1;
-          const scaled = (centered * (height / 850)) * gain * invertedMultiplier;
-          const currentY = midY - scaled;
+          const scaled = (centered * (height / 300)) * gain * invertedMultiplier;
+          const currentY = Math.max(4, Math.min(height - 4, midY - scaled));
 
           // Erase head (clears 20px ahead of sweep bar)
           const eraseWidth = 24;
