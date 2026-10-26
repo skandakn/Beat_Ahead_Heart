@@ -10,13 +10,15 @@ export const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 
 // Overpass API mirrors for high availability and failover (fastest/most reliable first)
 const OVERPASS_MIRRORS = [
-  'https://overpass.openstreetmap.fr/api/interpreter',
-  'https://z.overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass-api.de/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
 ];
 
-// In-memory cache to respect Overpass usage policies (10-minute TTL)
+const OSM_USER_AGENT = 'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beataheadheart-l4x4.vercel.app; skanda.kn@gmail.com)';
+
+// In-memory cache to respect OpenStreetMap usage policies (10-minute TTL)
 interface CacheEntry {
   timestamp: number;
   places: HealthcarePlace[];
@@ -445,8 +447,189 @@ export function prioritizeHealthcarePlaces(places: HealthcarePlace[]): Healthcar
 }
 
 /**
+ * Fallback to OpenStreetMap Nominatim API when Overpass servers are rate-limited or busy.
+ * Nominatim provides reliable, standard search across hospitals, clinics, doctors, and pharmacies.
+ */
+async function queryNominatimNearby(
+  latitude: number,
+  longitude: number,
+  radiusKm: number = 10
+): Promise<HealthcarePlace[]> {
+  // Approximate bounding box delta (1 deg latitude ~ 111 km)
+  const delta = Math.max((radiusKm * 1.3) / 111, 0.08);
+  const minLon = longitude - delta;
+  const maxLon = longitude + delta;
+  const minLat = latitude - delta;
+  const maxLat = latitude + delta;
+  const viewbox = `${minLon.toFixed(4)},${maxLat.toFixed(4)},${maxLon.toFixed(4)},${minLat.toFixed(4)}`;
+
+  const categories = ['hospital', 'clinic', 'doctors', 'pharmacy'];
+  const placesMap = new Map<string, HealthcarePlace>();
+
+  // Fetch in parallel for speed
+  const promises = categories.map(async (cat) => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+        cat
+      )}&format=jsonv2&viewbox=${viewbox}&bounded=1&limit=15&addressdetails=1&extratags=1`;
+
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': OSM_USER_AGENT,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (!res.ok) return [];
+      const items = await res.json();
+      return Array.isArray(items) ? items : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const resultsByCat = await Promise.all(promises);
+
+  for (const items of resultsByCat) {
+    for (const item of items) {
+      const lat = parseFloat(item.lat);
+      const lon = parseFloat(item.lon);
+      if (isNaN(lat) || isNaN(lon)) continue;
+
+      const id = `osm_${item.osm_type || 'node'}_${item.osm_id || Math.random().toString(36).slice(2, 8)}`;
+      if (placesMap.has(id)) continue;
+
+      const name = item.name || item.display_name?.split(',')[0]?.trim() || 'Healthcare Facility';
+      const address = item.display_name || '';
+
+      const distKm = calculateDistanceKm(latitude, longitude, lat, lon);
+      const distMeters = Math.round(distKm * 1000);
+
+      const rawPhone =
+        item.extratags?.['contact:phone'] ||
+        item.extratags?.phone ||
+        item.extratags?.telephone ||
+        item.extratags?.['emergency:phone'] ||
+        null;
+
+      const placeType = determinePlaceType(
+        item.type || item.category,
+        [item.type, item.category].filter(Boolean),
+        name
+      );
+
+      const isCardiac = /cardio|cardiac|heart/.test(
+        `${name} ${item.type || ''} ${JSON.stringify(item.extratags || {})}`.toLowerCase()
+      );
+
+      placesMap.set(id, {
+        id,
+        name,
+        address,
+        latitude: lat,
+        longitude: lon,
+        distance: formatDistance(distKm),
+        distanceMeters: distMeters,
+        phoneNumber: rawPhone ? String(rawPhone).trim() : null,
+        openNow: item.extratags?.opening_hours === '24/7' ? true : null,
+        openingHours: item.extratags?.opening_hours || null,
+        placeType,
+        mapsUrl: buildNavigationUrl(lat, lon, id, name),
+        cardiacCare: isCardiac,
+        source: 'openstreetmap',
+      });
+    }
+  }
+
+  return prioritizeHealthcarePlaces(Array.from(placesMap.values()));
+}
+
+/**
+ * Searches Nominatim by text query.
+ */
+async function queryNominatimByText(
+  queryText: string,
+  userLat?: number,
+  userLon?: number
+): Promise<HealthcarePlace[]> {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+    queryText
+  )}&format=jsonv2&limit=25&addressdetails=1&extratags=1${
+    typeof userLat === 'number' && typeof userLon === 'number'
+      ? `&lat=${userLat}&lon=${userLon}`
+      : ''
+  }`;
+
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': OSM_USER_AGENT,
+      Accept: 'application/json',
+    },
+    signal: AbortSignal.timeout(6000),
+  });
+
+  if (!res.ok) return [];
+  const items = await res.json();
+  if (!Array.isArray(items)) return [];
+
+  const places: HealthcarePlace[] = [];
+
+  for (const item of items) {
+    const lat = parseFloat(item.lat);
+    const lon = parseFloat(item.lon);
+    if (isNaN(lat) || isNaN(lon)) continue;
+
+    const id = `osm_${item.osm_type || 'node'}_${item.osm_id || Math.random().toString(36).slice(2, 8)}`;
+    const name = item.name || item.display_name?.split(',')[0]?.trim() || 'Healthcare Facility';
+    const address = item.display_name || '';
+
+    let distKm = 0;
+    if (typeof userLat === 'number' && typeof userLon === 'number') {
+      distKm = calculateDistanceKm(userLat, userLon, lat, lon);
+    }
+    const distMeters = Math.round(distKm * 1000);
+
+    const rawPhone =
+      item.extratags?.['contact:phone'] ||
+      item.extratags?.phone ||
+      item.extratags?.telephone ||
+      null;
+
+    const placeType = determinePlaceType(
+      item.type || item.category,
+      [item.type, item.category].filter(Boolean),
+      name
+    );
+
+    const isCardiac = /cardio|cardiac|heart/.test(
+      `${name} ${item.type || ''} ${JSON.stringify(item.extratags || {})}`.toLowerCase()
+    );
+
+    places.push({
+      id,
+      name,
+      address,
+      latitude: lat,
+      longitude: lon,
+      distance: formatDistance(distKm),
+      distanceMeters: distMeters,
+      phoneNumber: rawPhone ? String(rawPhone).trim() : null,
+      openNow: item.extratags?.opening_hours === '24/7' ? true : null,
+      openingHours: item.extratags?.opening_hours || null,
+      placeType,
+      mapsUrl: buildNavigationUrl(lat, lon, id, name),
+      cardiacCare: isCardiac,
+      source: 'openstreetmap',
+    });
+  }
+
+  return prioritizeHealthcarePlaces(places);
+}
+
+/**
  * Queries OpenStreetMap Overpass API for nearby healthcare facilities within radiusKm (~10 km).
- * Uses fast spatial bounding box indexing and automatic multi-mirror failover.
+ * Automatically fails over to OpenStreetMap Nominatim if Overpass is busy or rate-limited.
  */
 export async function queryOverpassNearby(
   latitude: number,
@@ -464,7 +647,7 @@ export async function queryOverpassNearby(
   const safeRadiusKm = Math.min(Math.max(radiusKm, 1), 25);
   const radiusMeters = Math.round(Math.min(safeRadiusKm * 1000, 8000));
 
-  const query = `[out:json][timeout:10];
+  const query = `[out:json][timeout:8];
 (
   node["amenity"="hospital"](around:${radiusMeters},${latitude},${longitude});
   node["amenity"="clinic"](around:${radiusMeters},${latitude},${longitude});
@@ -484,12 +667,11 @@ out center tags 50;`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent':
-            'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beat-ahead.vercel.app; skanda.kn@gmail.com)',
-          Accept: 'application/json',
+          'User-Agent': OSM_USER_AGENT,
+          Accept: 'application/json, text/plain, */*',
         },
         body: 'data=' + encodeURIComponent(query),
-        signal: AbortSignal.timeout(6000), // 6-second failover timeout
+        signal: AbortSignal.timeout(5000), // 5-second failover timeout
       });
 
       if (!response.ok) {
@@ -511,34 +693,51 @@ out center tags 50;`;
         }
       }
 
-      const prioritized = prioritizeHealthcarePlaces(normalized);
+      if (normalized.length > 0) {
+        const prioritized = prioritizeHealthcarePlaces(normalized);
 
-      // Cache result
-      overpassCache.set(cacheKey, {
-        timestamp: Date.now(),
-        places: prioritized,
-      });
+        // Cache result
+        overpassCache.set(cacheKey, {
+          timestamp: Date.now(),
+          places: prioritized,
+        });
 
-      // Keep cache size bounded
-      if (overpassCache.size > 200) {
-        const oldestKey = overpassCache.keys().next().value;
-        if (oldestKey) overpassCache.delete(oldestKey);
+        // Keep cache size bounded
+        if (overpassCache.size > 200) {
+          const oldestKey = overpassCache.keys().next().value;
+          if (oldestKey) overpassCache.delete(oldestKey);
+        }
+
+        return prioritized;
       }
-
-      return prioritized;
     } catch (err: any) {
       lastError = err;
       // Try next mirror
     }
   }
 
+  // Graceful fallback: If Overpass mirrors are busy, query OpenStreetMap Nominatim
+  try {
+    const fallbackPlaces = await queryNominatimNearby(latitude, longitude, radiusKm);
+    if (fallbackPlaces.length > 0) {
+      overpassCache.set(cacheKey, {
+        timestamp: Date.now(),
+        places: fallbackPlaces,
+      });
+      return fallbackPlaces;
+    }
+  } catch (nomErr: any) {
+    console.warn('[Nominatim Fallback Notice]:', nomErr?.message);
+  }
+
   throw new Error(
-    `OpenStreetMap Overpass API is currently unavailable: ${lastError?.message || 'Gateway Timeout'}. Please use the direct Call Emergency Services (112) option.`
+    `OpenStreetMap Healthcare Directory service is currently busy (${lastError?.message || 'Server timeout'}). In an emergency, dial 112 directly.`
   );
 }
 
 /**
- * Searches OpenStreetMap Overpass by text query (hospital name, locality or city).
+ * Searches OpenStreetMap Overpass by text query (hospital name, locality or city),
+ * with fallback to Nominatim.
  */
 export async function queryOverpassByText(
   queryText: string,
@@ -563,7 +762,7 @@ export async function queryOverpassByText(
   }
 
   // Name search on Overpass
-  const query = `[out:json][timeout:10];
+  const query = `[out:json][timeout:8];
 (
   node["amenity"~"hospital|clinic|doctors|pharmacy"]["name"~"${sanitized}",i];
   way["amenity"~"hospital|clinic|doctors|pharmacy"]["name"~"${sanitized}",i];
@@ -578,12 +777,11 @@ out center tags 30;`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent':
-            'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beat-ahead.vercel.app; skanda.kn@gmail.com)',
-          Accept: 'application/json',
+          'User-Agent': OSM_USER_AGENT,
+          Accept: 'application/json, text/plain, */*',
         },
         body: 'data=' + encodeURIComponent(query),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!response.ok) {
@@ -599,13 +797,22 @@ out center tags 30;`;
         if (place) normalized.push(place);
       }
 
-      return prioritizeHealthcarePlaces(normalized);
+      if (normalized.length > 0) {
+        return prioritizeHealthcarePlaces(normalized);
+      }
     } catch (err: any) {
       lastError = err;
     }
   }
 
-  throw new Error(
-    `Overpass text search unavailable: ${lastError?.message || 'Network error'}`
-  );
+  // Fallback to Nominatim text search
+  try {
+    const fallbackResults = await queryNominatimByText(sanitized, userLat, userLon);
+    if (fallbackResults.length > 0) {
+      return fallbackResults;
+    }
+  } catch {}
+
+  return [];
 }
+
