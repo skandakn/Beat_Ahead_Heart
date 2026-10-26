@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { BeatAheadAuthProvider } from "@/lib/auth/ClerkAuthWrapper";
 import { SimulationProvider } from "@/lib/simulation/SimulationContext";
+import { HardwareSerialProvider } from "@/lib/hardware/HardwareSerialContext";
 import { SubscriptionProvider } from "@/lib/subscription/SubscriptionContext";
 import { Sidebar, MobileNav } from "@/components/layout/Sidebar";
 import { AppContentWrapper } from "@/components/layout/AppContentWrapper";
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <I18nProvider>
             <SubscriptionProvider>
               <SimulationProvider>
+              <HardwareSerialProvider>
                 <TooltipProvider>
                   <TourProvider>
                     <GuidedTour />
@@ -75,6 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <CardiacVoiceWidget />
                   </TourProvider>
                 </TooltipProvider>
+              </HardwareSerialProvider>
               </SimulationProvider>
             </SubscriptionProvider>
           </I18nProvider>

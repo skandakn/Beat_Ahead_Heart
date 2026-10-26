@@ -3,22 +3,19 @@
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { cn, getTrendLabel } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import { Activity, TrendingUp, Target, HeartPulse } from "lucide-react";
+import { Activity, TrendingUp, Target } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useHardwareSerial } from "@/lib/hardware/HardwareSerialContext";
 
 export function DashboardStats() {
-  const { currentScore, baseline, healthRecord } = useSimulation();
+  const { currentScore, baseline } = useSimulation();
   const { t } = useI18n();
-
-  const hrValue = healthRecord?.restingHeartRate ?? baseline.restingHR;
-  const bpSuffix = healthRecord?.systolicBP && healthRecord?.diastolicBP 
-    ? ` · BP ${healthRecord.systolicBP}/${healthRecord.diastolicBP}`
-    : "";
+  const { isConnected, isiScore } = useHardwareSerial();
 
   const stats = [
     {
       label: t("stats.currentISI"),
-      value: currentScore?.score ?? "--",
+      value: isConnected ? isiScore : (currentScore?.score ?? "--"),
       suffix: "/ 100",
       icon: Activity,
       accent: true,
@@ -34,16 +31,10 @@ export function DashboardStats() {
       value: currentScore?.baseline ?? baseline.isi,
       icon: Target,
     },
-    {
-      label: t("stats.restingVitals"),
-      value: `${hrValue} ${t("ui.bpm")}`,
-      suffix: bpSuffix,
-      icon: HeartPulse,
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {stats.map((stat) => {
         const Icon = stat.icon;
         return (
@@ -62,11 +53,6 @@ export function DashboardStats() {
                   <Icon className={cn("w-4 h-4", stat.accent ? "text-cardiac" : "text-navy-600")} />
                 </div>
               </div>
-              {stat.label === t("stats.restingVitals") && (
-                <p className="mt-2 text-xs font-medium text-emerald-600">
-                  {t("stats.fromHealthRecord")}
-                </p>
-              )}
             </CardContent>
           </Card>
         );

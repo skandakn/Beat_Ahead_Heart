@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,261 +28,58 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type SimulationPreset = "arduino" | "normal" | "ischemic" | "tachycardia" | "leads_off";
+import { useHardwareSerial } from "@/lib/hardware/HardwareSerialContext";
 
 export function LiveEcgMonitor() {
-  // Connection states
-  const [isSerialSupported, setIsSerialSupported] = useState<boolean>(true);
+  const {
+    isSerialSupported,
+    isConnected,
+    isBrave,
+    portName,
+    preset,
+    setPreset,
+    leadsOff,
+    setLeadsOff,
+    heartRate,
+    stDeviationMm,
+    isiScore,
+    sqi,
+    sampleRate,
+    samplesReceived,
+    processingStatus,
+    rawLog,
+    clearRawLog,
+    adcMin,
+    adcMax,
+    leadsOffCount,
+    connectSerial,
+    disconnectSerial,
+    drainSamples,
+    soundEnabled,
+    setSoundEnabled,
+    playBeep,
+  } = useHardwareSerial();
+
+  // Local UI / Display Controls
   const [showTroubleshoot, setShowTroubleshoot] = useState<boolean>(false);
   const [showDebug, setShowDebug] = useState<boolean>(false);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [portName, setPortName] = useState<string>("Disconnected");
-  const [preset, setPreset] = useState<SimulationPreset>("normal");
-  const [leadsOff, setLeadsOff] = useState<boolean>(false);
-  // Debug raw data log
-  const [rawLog, setRawLog] = useState<string[]>([]);
-  const rawLogRef = useRef<string[]>([]);
-  const [adcMin, setAdcMin] = useState<number>(9999);
-  const [adcMax, setAdcMax] = useState<number>(0);
-  const [leadsOffCount, setLeadsOffCount] = useState<number>(0);
-
-  // Monitor parameters
   const [gain, setGain] = useState<number>(1.0);
   const [sweepSpeed, setSweepSpeed] = useState<number>(1.0); // 1.0 = 25 mm/s
   const [isFrozen, setIsFrozen] = useState<boolean>(false);
   const [isInverted, setIsInverted] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
 
-  // Telemetry metrics
-  const [heartRate, setHeartRate] = useState<number>(72);
-  const [stDeviationMm, setStDeviationMm] = useState<number>(0.0);
-  const [isiScore, setIsiScore] = useState<number>(14);
-  const [sqi, setSqi] = useState<number>(96);
-  const [sampleRate, setSampleRate] = useState<number>(250);
-  const [samplesReceived, setSamplesReceived] = useState<number>(0);
-  const [processingStatus, setProcessingStatus] = useState<string>("Waiting for signal...");
-
-  // Canvas ref
+  // Canvas Oscilloscope references
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const serialPortRef = useRef<any>(null);
-  const readerRef = useRef<any>(null);
-  const isReadingRef = useRef<boolean>(false);
-
-  // Signal processing buffers
-  const bufferRef = useRef<number[]>([]);           // canvas render buffer
-  const analysisBufferRef = useRef<number[]>([]);   // 4-second sliding window for ISI/QRS analysis
   const sweepXRef = useRef<number>(0);
   const lastYRef = useRef<number>(0);
-  const samplesSecCountRef = useRef<number>(0);
-  const rPeakTimeRef = useRef<number>(Date.now());
-  const audioContextRef = useRef<AudioContext | null>(null);
-  // Auto-baseline (exponential moving average for DC offset removal)
-  const baselineRef = useRef<number>(512); // starts at midpoint, adapts to real signal
+  const baselineRef = useRef<number>(512);
 
-  // Check Web Serial support
+  // Local buffer for synthetic simulation when hardware is not connected
+  const synthBufferRef = useRef<number[]>([]);
+
+  // Synthetic Waveform Generator (active when disconnected or non-arduino preset selected)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setIsSerialSupported("serial" in navigator);
-    }
-  }, []);
-
-  // Beep sound on R-peak
-  const playBeep = useCallback(() => {
-    if (!soundEnabled || typeof window === "undefined") return;
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === "suspended") {
-        ctx.resume();
-      }
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
-      gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.06);
-    } catch {}
-  }, [soundEnabled]);
-
-  // Connect via Web Serial API
-  const connectSerial = async () => {
-    if (!("serial" in navigator)) {
-      alert("Web Serial is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
-      setShowTroubleshoot(true);
-      return;
-    }
-
-    try {
-      const port = await (navigator as any).serial.requestPort();
-      await port.open({ baudRate: 9600 });
-      serialPortRef.current = port;
-      setIsConnected(true);
-      setPreset("arduino");
-      setPortName("Arduino Uno (USB)");
-      setShowTroubleshoot(false);
-      // Reset baseline so it adapts to real signal DC level
-      baselineRef.current = 512;
-
-      isReadingRef.current = true;
-      readSerialLoop(port);
-    } catch (err: any) {
-      console.warn("Serial connection canceled or failed:", err);
-      setIsConnected(false);
-      // Auto-show troubleshooting if no device was selected or error occurred
-      setShowTroubleshoot(true);
-    }
-  };
-
-  const disconnectSerial = async () => {
-    isReadingRef.current = false;
-    try {
-      if (readerRef.current) {
-        await readerRef.current.cancel();
-      }
-      if (serialPortRef.current) {
-        await serialPortRef.current.close();
-      }
-    } catch (e) {
-      console.error("Error closing serial port:", e);
-    } finally {
-      serialPortRef.current = null;
-      readerRef.current = null;
-      setIsConnected(false);
-      setPortName("Disconnected");
-      setPreset("normal");
-    }
-  };
-
-  // Continuous serial reading loop
-  const readSerialLoop = async (port: any) => {
-    const textDecoder = new TextDecoderStream();
-    const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-    const reader = textDecoder.readable.getReader();
-    readerRef.current = reader;
-
-    let lineBuffer = "";
-
-    try {
-      while (isReadingRef.current) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          lineBuffer += value;
-          const lines = lineBuffer.split("\n");
-          lineBuffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed === "!") {
-              setLeadsOff(true);
-              setLeadsOffCount(c => c + 1);
-              // Log to debug panel
-              rawLogRef.current = [`! (leads-off)`, ...rawLogRef.current].slice(0, 60);
-              setRawLog([...rawLogRef.current]);
-            } else if (trimmed) {
-              const adc = parseFloat(trimmed);
-              if (!isNaN(adc)) {
-                setLeadsOff(false);
-                bufferRef.current.push(adc);
-                // Also feed 4-second sliding analysis window (max 1000 samples @ 250Hz)
-                analysisBufferRef.current.push(adc);
-                if (analysisBufferRef.current.length > 1000) {
-                  analysisBufferRef.current.shift();
-                }
-                samplesSecCountRef.current += 1;
-                // Update debug stats
-                setAdcMin(m => Math.min(m, adc));
-                setAdcMax(m => Math.max(m, adc));
-                // Only log every 10th sample to avoid flooding
-                if (samplesSecCountRef.current % 10 === 0) {
-                  rawLogRef.current = [`ADC: ${adc}`, ...rawLogRef.current].slice(0, 60);
-                  setRawLog([...rawLogRef.current]);
-                }
-              } else {
-                rawLogRef.current = [`??? "${trimmed}"`, ...rawLogRef.current].slice(0, 60);
-                setRawLog([...rawLogRef.current]);
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Serial read loop error:", error);
-    } finally {
-      reader.releaseLock();
-    }
-  };
-
-  // Sample Rate Counter (Hz)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSampleRate(samplesSecCountRef.current);
-      setSamplesReceived((prev) => prev + samplesSecCountRef.current);
-      samplesSecCountRef.current = 0;
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Live Hardware ECG Analysis Pipeline — runs every 2s when Arduino connected
-  // Sends real ADC samples to /api/ecg/process and updates ISI, ST, HR, SQI
-  useEffect(() => {
-    if (!isConnected || preset !== "arduino") return;
-
-    const analysisInterval = setInterval(async () => {
-      const window = [...analysisBufferRef.current];
-      // Need at least 2 seconds of data (500 samples @ 250Hz) for reliable QRS detection
-      if (window.length < 500) {
-        setProcessingStatus(`Collecting samples... (${window.length}/500)`);
-        return;
-      }
-
-      try {
-        setProcessingStatus("Processing ECG window...");
-        const res = await fetch("/api/ecg/process", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            samples: window,
-            sampling_rate: sampleRate > 50 ? sampleRate : 250,
-          }),
-        });
-
-        if (!res.ok) return;
-        const data = await res.json();
-
-        if (data.status === "success") {
-          // Update all telemetry metrics from real ECG signal
-          if (data.heart_rate_bpm >= 30 && data.heart_rate_bpm <= 220) {
-            setHeartRate(data.heart_rate_bpm);
-          }
-          setStDeviationMm(data.st_deviation_mm ?? 0);
-          setIsiScore(data.isi_score ?? 14);
-          setSqi(data.signal_quality_percent ?? 80);
-
-          const peaks = data.r_peaks?.length ?? 0;
-          const stMm = (data.st_deviation_mm ?? 0).toFixed(2);
-          setProcessingStatus(
-            `Live: ${peaks} QRS detected | ST ${stMm >= "0" ? "+" : ""}${stMm} mm | ${data.risk_tier}`
-          );
-        }
-      } catch {
-        setProcessingStatus("Analysis error — retrying...");
-      }
-    }, 2000); // Analyse every 2 seconds
-
-    return () => clearInterval(analysisInterval);
-  }, [isConnected, preset, sampleRate]);
-
-  // Synthetic Waveform Generator (when Arduino not connected or preset active)
-  useEffect(() => {
-    if (preset === "arduino" && isConnected) return;
+    if (isConnected && preset === "arduino") return;
 
     let t = 0;
     const interval = setInterval(() => {
@@ -294,82 +91,65 @@ export function LiveEcgMonitor() {
       }
       setLeadsOff(false);
 
-      // Target physiological parameters based on preset
-      let targetBpm = 72;
-      let targetStShift = 0.0;
-      let targetIsi = 12;
-
-      if (preset === "ischemic") {
-        targetBpm = 86;
-        targetStShift = -1.6; // Severe subendocardial ST depression (mm)
-        targetIsi = 78;
-      } else if (preset === "tachycardia") {
-        targetBpm = 112;
-        targetStShift = -0.6; // Exertional ST sagging (mm)
-        targetIsi = 54;
-      } else {
-        targetBpm = 68;
-        targetStShift = 0.05;
-        targetIsi = 14;
-      }
-
-      setHeartRate(targetBpm);
-      setStDeviationMm(targetStShift);
-      setIsiScore(targetIsi);
-      setSqi(preset === "ischemic" ? 92 : 98);
-
-      // Generate realistic ECG waveform (P-Q-R-S-T)
-      const period = 60 / targetBpm;
+      // Period based on dynamic heart rate from context
+      const period = 60 / Math.max(40, heartRate);
       const phase = (t % period) / period; // 0 to 1
 
-      let val = 512; // Baseline ADC counts
+      let val = 512;
 
-      // P Wave (atrial depolarization: 0.10 - 0.20)
-      if (phase >= 0.10 && phase <= 0.20) {
-        val += 35 * Math.sin(((phase - 0.10) / 0.10) * Math.PI);
+      // P Wave
+      if (phase >= 0.1 && phase <= 0.2) {
+        val += 35 * Math.sin(((phase - 0.1) / 0.1) * Math.PI);
       }
-      // Q Dip (0.28 - 0.30)
-      else if (phase >= 0.28 && phase <= 0.30) {
+      // Q Dip
+      else if (phase >= 0.28 && phase <= 0.3) {
         val -= 45 * Math.sin(((phase - 0.28) / 0.02) * Math.PI);
       }
-      // R Peak (ventricular depolarization: 0.30 - 0.34)
-      else if (phase > 0.30 && phase <= 0.34) {
-        val += 340 * Math.sin(((phase - 0.30) / 0.04) * Math.PI);
+      // R Peak
+      else if (phase > 0.3 && phase <= 0.34) {
+        val += 340 * Math.sin(((phase - 0.3) / 0.04) * Math.PI);
         if (phase > 0.31 && phase < 0.33) {
           playBeep();
         }
       }
-      // S Dip (0.34 - 0.38)
+      // S Dip
       else if (phase > 0.34 && phase <= 0.38) {
         val -= 95 * Math.sin(((phase - 0.34) / 0.04) * Math.PI);
       }
-      // ST Segment & T Wave (0.38 - 0.70)
-      else if (phase > 0.38 && phase <= 0.70) {
-        // Ischemic ST Depression displacement
-        val += targetStShift * 28.0; // 1 mm ~ 28 ADC counts
-
-        // T wave peak around 0.52
+      // ST Segment & T Wave
+      else if (phase > 0.38 && phase <= 0.7) {
+        val += stDeviationMm * 28.0;
         if (preset === "ischemic") {
-          // Inverted or flattened T-wave in myocardial ischemia
           val -= 45 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
         } else {
-          // Normal upright T-wave
           val += 65 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
         }
       }
 
-      // Add slight physiological baseline noise
       val += (Math.random() - 0.5) * 6;
 
-      bufferRef.current.push(val);
-      samplesSecCountRef.current += 1;
-      t += 0.005; // 200 Hz
+      synthBufferRef.current.push(val);
+      if (synthBufferRef.current.length > 500) {
+        synthBufferRef.current.shift();
+      }
+
+      t += 0.005;
     }, 5);
 
     return () => clearInterval(interval);
-  }, [preset, isConnected, isFrozen, playBeep]);
+  }, [isConnected, preset, isFrozen, heartRate, stDeviationMm, playBeep, setLeadsOff]);
 
-  // High-performance Canvas Rendering (Classic Medical Monitor Sweep)
+  // Handle Connect Click
+  const handleConnectClick = async () => {
+    const success = await connectSerial();
+    if (!success) {
+      setShowTroubleshoot(true);
+    } else {
+      setShowTroubleshoot(false);
+    }
+  };
+
+  // High-performance Medical Sweep Oscilloscope Canvas Rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -385,12 +165,11 @@ export function LiveEcgMonitor() {
 
       // Draw background and hospital grid once or on clear
       if (sweepXRef.current === 0) {
-        // Clinical monitor dark slate background
         ctx.fillStyle = "#030712";
         ctx.fillRect(0, 0, width, height);
 
-        // Draw standard 1 mm small squares and 5 mm heavy squares
-        ctx.strokeStyle = "rgba(239, 68, 68, 0.12)"; // Faint medical grid
+        // Standard 1 mm small squares
+        ctx.strokeStyle = "rgba(239, 68, 68, 0.12)";
         ctx.lineWidth = 1;
         const smallBox = 8;
         for (let x = 0; x < width; x += smallBox) {
@@ -431,29 +210,33 @@ export function LiveEcgMonitor() {
         ctx.setLineDash([]);
       }
 
-      // Process samples from buffer
-      const samplesToProcess = Math.min(bufferRef.current.length, 12);
-      if (samplesToProcess > 0 && !isFrozen) {
-        for (let i = 0; i < samplesToProcess; i++) {
-          const rawAdc = bufferRef.current.shift()!;
+      // Determine samples to process this frame
+      let samples: number[] = [];
+      if (isConnected && preset === "arduino") {
+        samples = drainSamples(14);
+      } else {
+        const count = Math.min(synthBufferRef.current.length, 12);
+        samples = synthBufferRef.current.splice(0, count);
+      }
+
+      if (samples.length > 0 && !isFrozen) {
+        for (let i = 0; i < samples.length; i++) {
+          const rawAdc = samples[i];
           const currentX = sweepXRef.current;
 
-          // Auto-baseline: exponential moving average tracks DC offset
-          // alpha=0.002 → ~500 sample time constant (~2s at 250Hz) — slow enough not to follow QRS
-          baselineRef.current = baselineRef.current * (1 - 0.002) + rawAdc * 0.002;
-
-          // Convert raw ADC to canvas Y using adaptive baseline (not fixed 512)
+          // Auto-baseline tracking for DC offset removal
+          baselineRef.current = baselineRef.current * 0.998 + rawAdc * 0.002;
           const centered = rawAdc - baselineRef.current;
           const invertedMultiplier = isInverted ? -1 : 1;
-          const scaled = (centered * (height / 300)) * gain * invertedMultiplier;
+          const scaled = (centered * (height / 280)) * gain * invertedMultiplier;
           const currentY = Math.max(4, Math.min(height - 4, midY - scaled));
 
-          // Erase head (clears 20px ahead of sweep bar)
+          // Erase head (clears 24px ahead of sweep bar)
           const eraseWidth = 24;
           ctx.fillStyle = "#030712";
           ctx.fillRect(currentX, 0, eraseWidth, height);
 
-          // Redraw faint grid in erased column
+          // Redraw grid lines in erased region
           ctx.strokeStyle = "rgba(239, 68, 68, 0.12)";
           ctx.beginPath();
           for (let y = 0; y < height; y += 8) {
@@ -462,13 +245,12 @@ export function LiveEcgMonitor() {
           }
           ctx.stroke();
 
-          // Draw sweeping vertical phosphor bar
+          // Draw sweeping phosphor glow bar
           ctx.fillStyle = "rgba(74, 222, 128, 0.4)";
           ctx.fillRect(currentX + eraseWidth - 2, 0, 2, height);
 
-          // Draw ECG Trace Segment
+          // Draw ECG Trace
           if (leadsOff) {
-            // Draw flatline if leads off
             ctx.strokeStyle = "#EF4444";
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -476,7 +258,6 @@ export function LiveEcgMonitor() {
             ctx.lineTo(currentX + 1, midY);
             ctx.stroke();
           } else {
-            // Standard Neon Hospital Green Trace (#22C55E or #4ADE80)
             const isAlert = stDeviationMm <= -1.0;
             ctx.strokeStyle = isAlert ? "#EF4444" : "#22C55E";
             ctx.shadowColor = isAlert ? "#EF4444" : "#4ADE80";
@@ -488,11 +269,11 @@ export function LiveEcgMonitor() {
             ctx.moveTo(currentX - 1, lastYRef.current || currentY);
             ctx.lineTo(currentX, currentY);
             ctx.stroke();
-            ctx.shadowBlur = 0; // reset
+            ctx.shadowBlur = 0;
           }
 
           lastYRef.current = currentY;
-          sweepXRef.current += (1.4 * sweepSpeed);
+          sweepXRef.current += 1.4 * sweepSpeed;
 
           // Wrap sweep to beginning of screen
           if (sweepXRef.current >= width) {
@@ -507,7 +288,17 @@ export function LiveEcgMonitor() {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [gain, sweepSpeed, isFrozen, isInverted, leadsOff, stDeviationMm]);
+  }, [
+    isConnected,
+    preset,
+    isFrozen,
+    gain,
+    sweepSpeed,
+    isInverted,
+    leadsOff,
+    stDeviationMm,
+    drainSamples,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -519,9 +310,21 @@ export function LiveEcgMonitor() {
               <Activity className="w-5 h-5 animate-pulse" />
             </div>
             <h2 className="text-xl font-bold text-navy-900">AD8232 Live ECG Hardware Monitor</h2>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              <Radio className="w-3 h-3 text-emerald-600 animate-ping" />
-              LIVE TELEMETRY
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border",
+                isConnected
+                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  : "bg-blue-100 text-blue-800 border-blue-200"
+              )}
+            >
+              <Radio
+                className={cn(
+                  "w-3 h-3",
+                  isConnected ? "text-emerald-600 animate-ping" : "text-blue-600"
+                )}
+              />
+              {isConnected ? "HARDWARE STREAMING (ACTIVE)" : "SIMULATION PREVIEW"}
             </span>
           </div>
           <p className="text-xs text-navy-500 mt-1">
@@ -536,14 +339,14 @@ export function LiveEcgMonitor() {
               variant="outline"
               size="sm"
               onClick={disconnectSerial}
-              className="border-red-200 text-red-600 hover:bg-red-50"
+              className="border-red-200 text-red-600 hover:bg-red-50 font-semibold"
             >
               <WifiOff className="w-4 h-4 mr-1.5" />
               Disconnect ({portName})
             </Button>
           ) : (
             <Button
-              onClick={connectSerial}
+              onClick={handleConnectClick}
               size="sm"
               className="bg-cardiac hover:bg-red-700 text-white font-semibold shadow-xs"
             >
@@ -568,7 +371,10 @@ export function LiveEcgMonitor() {
               variant="outline"
               size="sm"
               onClick={() => setShowDebug(!showDebug)}
-              className={cn("border-navy-200 text-navy-700 hover:bg-navy-50", showDebug && "border-emerald-400 text-emerald-700 bg-emerald-50")}
+              className={cn(
+                "border-navy-200 text-navy-700 hover:bg-navy-50",
+                showDebug && "border-emerald-400 text-emerald-700 bg-emerald-50"
+              )}
               title="Show raw serial data stream for debugging"
             >
               <Terminal className="w-4 h-4 mr-1 text-emerald-600" />
@@ -582,7 +388,11 @@ export function LiveEcgMonitor() {
             onClick={() => setIsFrozen(!isFrozen)}
             className="border-navy-200 text-navy-700"
           >
-            {isFrozen ? <Play className="w-4 h-4 mr-1 text-emerald-600" /> : <Pause className="w-4 h-4 mr-1 text-amber-600" />}
+            {isFrozen ? (
+              <Play className="w-4 h-4 mr-1 text-emerald-600" />
+            ) : (
+              <Pause className="w-4 h-4 mr-1 text-amber-600" />
+            )}
             {isFrozen ? "Resume" : "Freeze"}
           </Button>
 
@@ -593,10 +403,37 @@ export function LiveEcgMonitor() {
             className="border-navy-200 text-navy-700"
             title={soundEnabled ? "Mute QRS Beep" : "Enable QRS Beep"}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4 text-navy-400" />}
+            {soundEnabled ? (
+              <Volume2 className="w-4 h-4 text-emerald-600" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-navy-400" />
+            )}
           </Button>
         </div>
       </div>
+
+      {/* Brave Browser Shield Warning */}
+      {isBrave && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-xs animate-in fade-in duration-200">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-bold flex items-center gap-1.5">
+              Brave Browser Detected &mdash; Web Serial Blocked by Default
+            </div>
+            <p className="text-amber-800 leading-relaxed">
+              Brave Shields block direct USB/Serial device enumeration by default, resulting in &quot;No compatible devices found&quot;.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
+                &bull; Quick Fix 1 (Recommended): Open in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.
+              </span>
+              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
+                &bull; Quick Fix 2: Click the orange <strong>Brave Lion Shield</strong> icon next to the URL bar &rarr; turn Shields <strong>OFF</strong> for this site.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hardware Troubleshooting Modal/Card */}
       {showTroubleshoot && (
@@ -622,7 +459,7 @@ export function LiveEcgMonitor() {
                   Step 1. Close Arduino IDE
                 </div>
                 <p className="mt-1 text-navy-600 leading-relaxed text-[11px]">
-                  On Windows, only <strong>ONE app</strong> can open COM16 at a time. If the <strong>Serial Monitor</strong> or <strong>Serial Plotter</strong> is open in Arduino IDE, close that window now!
+                  On Windows, only <strong>ONE app</strong> can open COM7 at a time. If the <strong>Serial Monitor</strong> or <strong>Serial Plotter</strong> is open in Arduino IDE, close that window now!
                 </p>
               </div>
 
@@ -640,7 +477,7 @@ export function LiveEcgMonitor() {
                   Step 3. Re-plug USB Cable
                 </div>
                 <p className="mt-1 text-navy-600 leading-relaxed text-[11px]">
-                  Unplug your Arduino USB cable from your laptop and plug it back in. Then click <strong>&quot;Connect Arduino USB&quot;</strong>, select <strong>Arduino Uno (COM16)</strong>, and click <strong>Connect</strong>.
+                  Unplug your Arduino USB cable from your laptop and plug it back in. Then click <strong>&quot;Connect Arduino USB&quot;</strong>, select <strong>Arduino Uno (COM7)</strong>, and click <strong>Connect</strong>.
                 </p>
               </div>
             </div>
@@ -649,12 +486,12 @@ export function LiveEcgMonitor() {
               <span className="text-navy-600">
                 <strong>Local CLI Option:</strong> You can also run the Python bridge directly:
                 <code className="ml-1 px-1.5 py-0.5 bg-navy-100 rounded text-navy-800 font-mono">
-                  python scripts/arduino_ecg_bridge.py --port COM16
+                  python scripts/arduino_ecg_bridge.py --port COM7
                 </code>
               </span>
               <Button
                 size="sm"
-                onClick={connectSerial}
+                onClick={handleConnectClick}
                 className="bg-cardiac hover:bg-red-700 text-white font-semibold text-xs h-7 shadow-xs"
               >
                 <Usb className="w-3.5 h-3.5 mr-1" />
@@ -674,28 +511,50 @@ export function LiveEcgMonitor() {
               Live Serial Debug — Raw Arduino Output
             </CardTitle>
             <div className="flex items-center gap-3 text-xs">
-              <span className="text-gray-400">ADC range: <span className="font-mono text-yellow-300">{adcMin === 9999 ? "—" : adcMin} → {adcMax === 0 ? "—" : adcMax}</span></span>
-              <span className="text-gray-400">Leads-off: <span className={cn("font-mono font-bold", leadsOffCount > 0 ? "text-red-400" : "text-emerald-400")}>{leadsOffCount}</span></span>
-              <span className="text-gray-400">Samples: <span className="font-mono text-cyan-300">{samplesReceived}</span></span>
-              <Button size="sm" variant="ghost" className="h-5 px-2 text-[10px] text-gray-500 hover:text-white"
-                onClick={() => { setRawLog([]); rawLogRef.current = []; setAdcMin(9999); setAdcMax(0); setLeadsOffCount(0); }}>
+              <span className="text-gray-400">
+                ADC range:{" "}
+                <span className="font-mono text-yellow-300">
+                  {adcMin === 9999 ? "—" : adcMin} → {adcMax === 0 ? "—" : adcMax}
+                </span>
+              </span>
+              <span className="text-gray-400">
+                Leads-off:{" "}
+                <span
+                  className={cn(
+                    "font-mono font-bold",
+                    leadsOffCount > 0 ? "text-red-400" : "text-emerald-400"
+                  )}
+                >
+                  {leadsOffCount}
+                </span>
+              </span>
+              <span className="text-gray-400">
+                Samples: <span className="font-mono text-cyan-300">{samplesReceived}</span>
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 px-2 text-[10px] text-gray-500 hover:text-white"
+                onClick={clearRawLog}
+              >
                 Clear
               </Button>
             </div>
           </CardHeader>
           <CardContent className="p-3 pt-0">
-            {/* Diagnosis banner */}
             {rawLog.length > 0 && (
-              <div className={cn(
-                "mb-2 px-3 py-2 rounded text-xs font-semibold",
-                leadsOffCount > samplesReceived * 0.8
-                  ? "bg-red-950 border border-red-600 text-red-300"
-                  : adcMax - adcMin < 5
-                  ? "bg-yellow-950 border border-yellow-600 text-yellow-300"
-                  : adcMax - adcMin < 30
-                  ? "bg-amber-950 border border-amber-500 text-amber-300"
-                  : "bg-emerald-950 border border-emerald-600 text-emerald-300"
-              )}>
+              <div
+                className={cn(
+                  "mb-2 px-3 py-2 rounded text-xs font-semibold",
+                  leadsOffCount > samplesReceived * 0.8
+                    ? "bg-red-950 border border-red-600 text-red-300"
+                    : adcMax - adcMin < 5
+                    ? "bg-yellow-950 border border-yellow-600 text-yellow-300"
+                    : adcMax - adcMin < 30
+                    ? "bg-amber-950 border border-amber-500 text-amber-300"
+                    : "bg-emerald-950 border border-emerald-600 text-emerald-300"
+                )}
+              >
                 {leadsOffCount > samplesReceived * 0.8
                   ? "⚠ Mostly '!' — Leads-Off! Check D10→LO+ and D11→LO- wires. Electrodes may not be on skin."
                   : adcMax - adcMin < 5
@@ -706,16 +565,23 @@ export function LiveEcgMonitor() {
               </div>
             )}
             {rawLog.length === 0 && (
-              <div className="text-gray-500 text-xs italic px-1">Waiting for data... (If nothing appears after 3 seconds, Arduino may not be sending data)</div>
+              <div className="text-gray-500 text-xs italic px-1">
+                Waiting for data... (If nothing appears after 3 seconds, Arduino may not be sending data)
+              </div>
             )}
-            {/* Raw log stream */}
             <div className="font-mono text-xs text-emerald-300 h-32 overflow-y-auto space-y-0.5 scrollbar-thin">
               {rawLog.map((entry, i) => (
-                <div key={i} className={cn("px-1 rounded text-[11px]",
-                  entry.startsWith("!") ? "text-red-400 bg-red-950/30" :
-                  entry.startsWith("???") ? "text-yellow-400 bg-yellow-950/30" :
-                  "text-emerald-300"
-                )}>
+                <div
+                  key={i}
+                  className={cn(
+                    "px-1 rounded text-[11px]",
+                    entry.startsWith("!")
+                      ? "text-red-400 bg-red-950/30"
+                      : entry.startsWith("???")
+                      ? "text-yellow-400 bg-yellow-950/30"
+                      : "text-emerald-300"
+                  )}
+                >
                   {entry}
                 </div>
               ))}
@@ -724,28 +590,38 @@ export function LiveEcgMonitor() {
         </Card>
       )}
 
-      {/* 4 Primary Telemetry Stat Cards */}
       {/* Processing status bar — shows live analysis pipeline status when hardware connected */}
-      {isConnected && preset === "arduino" && (
+      {isConnected && (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-navy-950/80 rounded-lg border border-navy-800 text-[11px] text-emerald-400 font-mono">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
           <span className="truncate">{processingStatus}</span>
         </div>
       )}
+
+      {/* 4 Primary Telemetry Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Heart Rate */}
         <Card className="border-navy-100 shadow-xs">
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <span className="font-semibold text-navy-600">Heart Rate</span>
-              <Heart className={cn("w-4 h-4 text-cardiac", heartRate > 90 ? "animate-ping" : "animate-pulse")} fill="currentColor" />
+              <Heart
+                className={cn(
+                  "w-4 h-4 text-cardiac",
+                  heartRate > 90 ? "animate-ping" : "animate-pulse"
+                )}
+                fill="currentColor"
+              />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-extrabold text-navy-900">{heartRate}</span>
               <span className="text-xs text-navy-400 font-medium">BPM</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              R-R Interval: <span className="font-semibold text-navy-700">{Math.round(60000 / heartRate)} ms</span>
+              R-R Interval:{" "}
+              <span className="font-semibold text-navy-700">
+                {Math.round(60000 / Math.max(1, heartRate))} ms
+              </span>
             </p>
           </CardContent>
         </Card>
@@ -755,7 +631,12 @@ export function LiveEcgMonitor() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <span className="font-semibold text-navy-600">ST Deviation</span>
-              <Activity className={cn("w-4 h-4", stDeviationMm <= -1.0 ? "text-red-600 animate-pulse" : "text-emerald-500")} />
+              <Activity
+                className={cn(
+                  "w-4 h-4",
+                  stDeviationMm <= -1.0 ? "text-red-600 animate-pulse" : "text-emerald-500"
+                )}
+              />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span
@@ -768,7 +649,9 @@ export function LiveEcgMonitor() {
                     : "text-emerald-600"
                 )}
               >
-                {stDeviationMm >= 0 ? `+${stDeviationMm.toFixed(2)}` : stDeviationMm.toFixed(2)}
+                {stDeviationMm >= 0
+                  ? `+${stDeviationMm.toFixed(2)}`
+                  : stDeviationMm.toFixed(2)}
               </span>
               <span className="text-xs text-navy-400 font-medium">mm (mV/10)</span>
             </div>
@@ -789,13 +672,26 @@ export function LiveEcgMonitor() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <span className="font-semibold text-navy-600">Ischemic Stress Index</span>
-              <Cpu className="w-4 h-4 text-indigo-500" />
+              <ShieldAlert
+                className={cn(
+                  "w-4 h-4",
+                  isiScore >= 70
+                    ? "text-red-600 animate-bounce"
+                    : isiScore >= 40
+                    ? "text-amber-500"
+                    : "text-emerald-500"
+                )}
+              />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span
                 className={cn(
                   "text-3xl font-extrabold",
-                  isiScore >= 70 ? "text-red-600" : isiScore >= 45 ? "text-amber-500" : "text-navy-900"
+                  isiScore >= 70
+                    ? "text-red-600"
+                    : isiScore >= 40
+                    ? "text-amber-500"
+                    : "text-emerald-600"
                 )}
               >
                 {isiScore}
@@ -803,67 +699,95 @@ export function LiveEcgMonitor() {
               <span className="text-xs text-navy-400 font-medium">/ 100</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              Status: <span className="font-semibold text-navy-700">{isiScore >= 70 ? "Acute Risk" : isiScore >= 45 ? "Elevated" : "Normal"}</span>
+              Status:{" "}
+              <span
+                className={cn(
+                  "font-bold",
+                  isiScore >= 70
+                    ? "text-red-600"
+                    : isiScore >= 40
+                    ? "text-amber-600"
+                    : "text-emerald-600"
+                )}
+              >
+                {isiScore >= 70 ? "Critical Ischemia" : isiScore >= 40 ? "Elevated" : "Normal"}
+              </span>
             </p>
           </CardContent>
         </Card>
 
-        {/* Hardware Status / Signal Quality */}
+        {/* Signal Quality & Hardware Stream */}
         <Card className="border-navy-100 shadow-xs">
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <span className="font-semibold text-navy-600">Hardware Stream</span>
-              <Usb className="w-4 h-4 text-teal-600" />
+              <Radio
+                className={cn(
+                  "w-4 h-4",
+                  isConnected ? "text-emerald-500 animate-pulse" : "text-navy-400"
+                )}
+              />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-navy-900">{sampleRate > 0 ? `${sampleRate} Hz` : "Idle"}</span>
-              <span className="text-xs text-navy-400">9600 baud</span>
+              <span className="text-3xl font-extrabold text-navy-900">{sampleRate}</span>
+              <span className="text-xs text-navy-400 font-medium">Hz (9600 baud)</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              Quality: <span className="font-semibold text-emerald-600">{sqi}% SQI</span> · {portName}
+              Quality:{" "}
+              <span className="font-semibold text-emerald-600">{sqi}% SQI</span>{" "}
+              <span className="text-navy-400">({portName})</span>
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Leads-Off Critical Alert Banner */}
+      {/* Leads-Off Visual Alarm */}
       {leadsOff && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 animate-pulse">
-          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-          <div className="text-xs">
-            <p className="font-bold">LEADS-OFF DETECTED (!) — Electrode Disconnected</p>
-            <p className="text-red-700 mt-0.5">
-              The AD8232 detected high impedance on LO+ (Pin 10) or LO- (Pin 11). Please check that all 3 electrode pads (RA, LA, RL) are firmly adhering to skin.
-            </p>
+        <div className="p-4 bg-red-500/10 border-2 border-red-500/40 rounded-xl flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
+            <div>
+              <h4 className="text-sm font-bold text-red-900">
+                LEADS-OFF DETECTED &mdash; POOR ELECTRODE CONTACT
+              </h4>
+              <p className="text-xs text-red-700 mt-0.5">
+                Pin 10 (LO+) or Pin 11 (LO-) triggered. Press electrode pads firmly onto your skin and check cable snaps.
+              </p>
+            </div>
           </div>
+          <span className="px-3 py-1 rounded bg-red-600 text-white font-bold text-xs uppercase tracking-wider">
+            Check Leads
+          </span>
         </div>
       )}
 
-      {/* Main Medical ECG Sweep Oscilloscope View */}
-      <Card className="border-navy-900 bg-navy-950 text-white overflow-hidden shadow-md">
-        <CardHeader className="bg-navy-900/80 px-5 py-3 border-b border-navy-800 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+      {/* Main Oscilloscope Sweep Canvas Container */}
+      <Card className="border-navy-200 shadow-md bg-gray-950 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-900/90 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               LEAD II TELEMETRY
             </span>
-            <span className="text-xs text-navy-400">|</span>
-            <span className="text-xs text-navy-300">Calibration: 10 mm/mV · 25 mm/s</span>
-            <span className="text-xs text-navy-400">|</span>
-            <span className="text-xs text-navy-300">Bandpass: 0.5–40 Hz + 50Hz Notch</span>
+            <span className="text-gray-400 hidden sm:inline">
+              Calibration: 10 mm/mV &bull; 25 mm/s
+            </span>
+            <span className="text-gray-400 hidden md:inline">
+              Bandpass: 0.5&ndash;40 Hz + 50Hz Notch
+            </span>
           </div>
 
+          {/* Quick Oscilloscope Controls */}
           <div className="flex items-center gap-2">
-            {/* Gain Selector */}
-            <div className="flex items-center gap-1 bg-navy-950 px-2 py-1 rounded border border-navy-800 text-[11px]">
-              <span className="text-navy-400">Gain:</span>
-              {[0.5, 1.0, 2.0].map((g) => (
+            <div className="flex items-center gap-1 bg-gray-800/80 p-0.5 rounded border border-gray-700">
+              <span className="text-[10px] text-gray-400 px-1 font-semibold">Gain:</span>
+              {[0.5, 1, 2].map((g) => (
                 <button
                   key={g}
                   onClick={() => setGain(g)}
                   className={cn(
-                    "px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors",
-                    gain === g ? "bg-cardiac text-white" : "text-navy-400 hover:text-white"
+                    "px-1.5 py-0.5 text-[10px] font-bold rounded",
+                    gain === g ? "bg-cardiac text-white" : "text-gray-300 hover:text-white"
                   )}
                 >
                   {g}x
@@ -871,57 +795,72 @@ export function LiveEcgMonitor() {
               ))}
             </div>
 
-            {/* Invert Polarity */}
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setIsInverted(!isInverted)}
-              className="h-7 text-[11px] border-navy-800 bg-navy-950 text-navy-300 hover:text-white"
-              title="Invert polarity if electrode wires are reversed on body"
+              className={cn(
+                "h-6 px-2 text-[10px] text-gray-300 border border-gray-700 hover:bg-gray-800",
+                isInverted && "bg-indigo-950 text-indigo-300 border-indigo-700"
+              )}
             >
-              <ArrowDownUp className="w-3.5 h-3.5 mr-1" />
+              <ArrowDownUp className="w-3 h-3 mr-1" />
               {isInverted ? "Inverted" : "Normal"}
             </Button>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-0 relative">
-          {/* Medical Oscilloscope Canvas */}
+        <div className="relative w-full aspect-[21/9] min-h-[320px] max-h-[500px] bg-black">
           <canvas
             ref={canvasRef}
             width={1200}
-            height={420}
-            className="w-full h-[340px] md:h-[400px] block cursor-crosshair"
+            height={480}
+            className="w-full h-full block"
           />
 
-          {/* On-screen Measurement HUD */}
-          <div className="absolute top-3 left-3 pointer-events-none flex flex-col gap-1 text-[11px] font-mono bg-navy-950/80 p-2.5 rounded border border-navy-800/80 backdrop-blur-xs">
-            <div className="text-emerald-400 font-bold">CH1: AD8232 (Lead II)</div>
-            <div className="text-navy-300">ST-Level: <span className={stDeviationMm <= -1.0 ? "text-red-400 font-bold" : "text-emerald-300"}>{stDeviationMm >= 0 ? `+${stDeviationMm.toFixed(2)}` : stDeviationMm.toFixed(2)} mm</span></div>
-            <div className="text-navy-300">R-R Mean: {Math.round(60000 / heartRate)} ms</div>
-            <div className="text-navy-300">Status: {preset === "arduino" ? "Physical Arduino Serial" : `Preset: ${preset.toUpperCase()}`}</div>
+          {/* Real-time Oscilloscope HUD Overlay */}
+          <div className="absolute top-3 left-3 pointer-events-none bg-black/60 backdrop-blur-xs p-2 rounded border border-gray-800/80 text-[11px] font-mono text-emerald-400 space-y-0.5">
+            <div>CH1: AD8232 (Lead II)</div>
+            <div>
+              ST-Level:{" "}
+              <span
+                className={cn(
+                  stDeviationMm <= -1.0
+                    ? "text-red-400 font-bold"
+                    : stDeviationMm <= -0.5
+                    ? "text-amber-400"
+                    : "text-emerald-400"
+                )}
+              >
+                {stDeviationMm >= 0
+                  ? `+${stDeviationMm.toFixed(2)}`
+                  : stDeviationMm.toFixed(2)}{" "}
+                mm
+              </span>
+            </div>
+            <div>R-R Mean: {Math.round(60000 / Math.max(1, heartRate))} ms</div>
+            <div>Status: {isConnected ? "Physical Arduino Serial" : "Preset Mode"}</div>
           </div>
-        </CardContent>
+        </div>
       </Card>
 
-      {/* Interactive Demonstration & Ischemic Stress Challenge Controls (For Judges) */}
-      <Card className="border-navy-100 bg-white shadow-xs">
+      {/* Preset Challenges (for Demonstration & Clinical Comparison) */}
+      <Card className="border-navy-100 shadow-xs">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-bold text-navy-900 flex items-center gap-2">
+          <CardTitle className="text-sm font-bold text-navy-900 flex items-center justify-between">
+            <span className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-cardiac" />
-              Interactive Demo & Ischemic Stress Challenge (For Clinical & Judge Demos)
-            </CardTitle>
-            <span className="text-xs text-navy-500">Switch scenarios to test live ML responses</span>
-          </div>
+              Clinical Presets &amp; Simulation Modes
+            </span>
+            <span className="text-xs font-normal text-navy-400">
+              Interactive testing without hardware
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <button
-              onClick={() => {
-                setPreset("normal");
-                setLeadsOff(false);
-              }}
+              onClick={() => setPreset("normal")}
               className={cn(
                 "p-3 rounded-xl border text-left transition-all",
                 preset === "normal"
@@ -933,45 +872,45 @@ export function LiveEcgMonitor() {
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 Normal Baseline
               </div>
-              <p className="text-[11px] text-navy-500 mt-1">Isoelectric ST (0.0 mm), HR 68 bpm, ISI 14 (Protected).</p>
+              <p className="text-[11px] text-navy-500 mt-1">
+                Healthy sinus rhythm, normal isoelectric ST (+0.05 mm), low ISI.
+              </p>
             </button>
 
             <button
-              onClick={() => {
-                setPreset("ischemic");
-                setLeadsOff(false);
-              }}
+              onClick={() => setPreset("ischemic")}
               className={cn(
                 "p-3 rounded-xl border text-left transition-all",
                 preset === "ischemic"
-                  ? "border-red-500 bg-red-50/60 shadow-xs"
+                  ? "border-red-500 bg-red-50/50 shadow-xs"
                   : "border-navy-100 hover:border-navy-200"
               )}
             >
               <div className="flex items-center gap-1.5 text-xs font-bold text-red-800">
-                <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
                 Acute Ischemia
               </div>
-              <p className="text-[11px] text-navy-500 mt-1">Severe ST depression (-1.6 mm), T-inversion, ISI spikes to 78.</p>
+              <p className="text-[11px] text-navy-500 mt-1">
+                Subendocardial ST depression (-1.6 mm), T-wave flattening, high ISI (78).
+              </p>
             </button>
 
             <button
-              onClick={() => {
-                setPreset("tachycardia");
-                setLeadsOff(false);
-              }}
+              onClick={() => setPreset("tachycardia")}
               className={cn(
                 "p-3 rounded-xl border text-left transition-all",
                 preset === "tachycardia"
-                  ? "border-amber-500 bg-amber-50/60 shadow-xs"
+                  ? "border-amber-500 bg-amber-50/50 shadow-xs"
                   : "border-navy-100 hover:border-navy-200"
               )}
             >
               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
-                <Activity className="w-3.5 h-3.5 text-amber-600" />
-                Exertional Stress
+                <Heart className="w-3.5 h-3.5 text-amber-600" />
+                Exertional Strain
               </div>
-              <p className="text-[11px] text-navy-500 mt-1">HR 112 bpm, mild ST sagging (-0.6 mm), ISI 54 (Elevated).</p>
+              <p className="text-[11px] text-navy-500 mt-1">
+                HR 114 bpm, mild ST sagging (-0.6 mm), ISI 54 (Elevated).
+              </p>
             </button>
 
             <button
@@ -990,7 +929,9 @@ export function LiveEcgMonitor() {
                 <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
                 Leads-Off Fault
               </div>
-              <p className="text-[11px] text-navy-500 mt-1">Simulates Pin 10/11 high (&apos;!&apos;), triggering clinical electrode alert.</p>
+              <p className="text-[11px] text-navy-500 mt-1">
+                Simulates Pin 10/11 high (&apos;!&apos;), triggering clinical electrode alert.
+              </p>
             </button>
           </div>
         </CardContent>
@@ -998,7 +939,6 @@ export function LiveEcgMonitor() {
 
       {/* Signal Processing Architecture & Hardware Pinout Guide */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Signal Processing Breakdown */}
         <Card className="border-navy-100 shadow-xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold text-navy-900 flex items-center gap-2">
@@ -1008,29 +948,28 @@ export function LiveEcgMonitor() {
           </CardHeader>
           <CardContent className="space-y-2.5 text-xs text-navy-600">
             <div className="p-2.5 rounded-lg bg-navy-50/80 border border-navy-100">
-              <span className="font-bold text-navy-900">1. ADC Acquisition:</span> AD8232 instrumentation amplifier (gain ~1100, CMRR 80dB) sampled at 250 Hz via Arduino A0 (0–1023).
+              <span className="font-bold text-navy-900">1. ADC Acquisition:</span> AD8232 instrumentation amplifier (gain ~1100, CMRR 80dB) sampled at ~200&ndash;250 Hz via Arduino A0.
             </div>
             <div className="p-2.5 rounded-lg bg-navy-50/80 border border-navy-100">
-              <span className="font-bold text-navy-900">2. Baseline & Bandpass Filter:</span> Causal 0.5 Hz high-pass removes respiration baseline wander; 40 Hz low-pass suppresses electromyographic (EMG) muscle noise.
+              <span className="font-bold text-navy-900">2. Adaptive Auto-Centering:</span> Dynamic exponential baseline eliminates DC offsets (160&ndash;280 counts) and centers signal on oscilloscope.
             </div>
             <div className="p-2.5 rounded-lg bg-navy-50/80 border border-navy-100">
-              <span className="font-bold text-navy-900">3. 50/60 Hz Notch Filter:</span> Narrow second-order IIR notch filter eliminates electrical grid alternating current noise.
+              <span className="font-bold text-navy-900">3. Instant Beat-by-Beat QRS:</span> Real-time R-peak detector measures exact R-R intervals and updates dynamic heart rate on every beat.
             </div>
             <div className="p-2.5 rounded-lg bg-navy-50/80 border border-navy-100">
-              <span className="font-bold text-navy-900">4. Pan-Tompkins QRS Detection:</span> Dynamic slope integration isolates R-wave peaks and calculates instantaneous RR intervals.
+              <span className="font-bold text-navy-900">4. J-Point ST Measurement:</span> Compares PR baseline with J+60ms level. Sustained depression &le; -1.0 mm triggers acute ischemic warning.
             </div>
             <div className="p-2.5 rounded-lg bg-navy-50/80 border border-navy-100">
-              <span className="font-bold text-navy-900">5. J-Point ST Measurement:</span> Compares PR isoelectric segment with J+60ms level. Sustained depression ≤ -1.0 mm triggers acute ischemic warning.
+              <span className="font-bold text-navy-900">5. Continuous Navigation:</span> Global persistent hardware provider ensures Arduino remains connected while browsing Overview or other pages.
             </div>
           </CardContent>
         </Card>
 
-        {/* Hardware Wiring Quick Reference */}
         <Card className="border-navy-100 shadow-xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold text-navy-900 flex items-center gap-2">
               <FileCode className="w-4 h-4 text-cardiac" />
-              Arduino AD8232 Pin Connections & Placement
+              Arduino AD8232 Pin Connections &amp; Placement
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5 text-xs text-navy-600">
@@ -1076,9 +1015,15 @@ export function LiveEcgMonitor() {
             <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-emerald-900">
               <span className="font-bold">Electrode Placement (Lead II Standard):</span>
               <ul className="list-disc list-inside mt-1 space-y-0.5">
-                <li><strong className="text-red-700">RA (Red):</strong> Right Clavicle / Upper Chest</li>
-                <li><strong className="text-yellow-700">LA (Yellow):</strong> Left Clavicle / Upper Chest</li>
-                <li><strong className="text-emerald-700">RL (Green):</strong> Right Lower Abdomen (Ground)</li>
+                <li>
+                  <strong className="text-red-700">RA (Red):</strong> Right Clavicle / Upper Chest
+                </li>
+                <li>
+                  <strong className="text-yellow-700">LA (Yellow):</strong> Left Clavicle / Upper Chest
+                </li>
+                <li>
+                  <strong className="text-emerald-700">RL (Green):</strong> Right Lower Abdomen (Ground)
+                </li>
               </ul>
             </div>
           </CardContent>

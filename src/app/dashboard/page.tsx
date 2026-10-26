@@ -12,11 +12,15 @@ import { useTour } from "@/lib/tour/TourContext";
 import Link from "next/link";
 import { Heart, PhoneCall, FileText, BookOpen, Info, Compass } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useHardwareSerial } from "@/lib/hardware/HardwareSerialContext";
+
 
 export default function DashboardPage() {
   const { settings, pauseMonitoring } = useSimulation();
   const { startTour } = useTour();
   const { t } = useI18n();
+  const { isConnected, heartRate, stDeviationMm, isiScore, portName } = useHardwareSerial();
+
 
   // Dashboard always shows a stable ISI score — stop any running simulation
   useEffect(() => {
@@ -33,6 +37,30 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Live Hardware Telemetry Banner (when Arduino is streaming) */}
+      {isConnected && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between flex-wrap gap-3 shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping shrink-0" />
+            <div>
+              <div className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                <span>AD8232 Hardware Streaming Active ({portName})</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-200 text-emerald-900 font-bold">LIVE TELEMETRY</span>
+              </div>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                Heart Rate: <strong className="font-mono text-emerald-950">{heartRate} BPM</strong> &bull; ST Deviation: <strong className="font-mono text-emerald-950">{stDeviationMm >= 0 ? `+${stDeviationMm.toFixed(2)}` : stDeviationMm.toFixed(2)} mm</strong> &bull; ISI Score: <strong className="font-mono text-emerald-950">{isiScore}/100</strong>
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/monitor"
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+          >
+            <span>Open Live ECG Monitor</span>
+            <span>&rarr;</span>
+          </Link>
+        </div>
+      )}
       <DashboardStats />
 
       <div className="grid lg:grid-cols-3 gap-6">
