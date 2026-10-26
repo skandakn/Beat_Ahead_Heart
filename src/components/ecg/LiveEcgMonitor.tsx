@@ -34,7 +34,6 @@ type SimulationPreset = "arduino" | "normal" | "ischemic" | "tachycardia" | "lea
 export function LiveEcgMonitor() {
   // Connection states
   const [isSerialSupported, setIsSerialSupported] = useState<boolean>(true);
-  const [isBrave, setIsBrave] = useState<boolean>(false);
   const [showTroubleshoot, setShowTroubleshoot] = useState<boolean>(false);
   const [showDebug, setShowDebug] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -81,16 +80,10 @@ export function LiveEcgMonitor() {
   // Auto-baseline (exponential moving average for DC offset removal)
   const baselineRef = useRef<number>(512); // starts at midpoint, adapts to real signal
 
-  // Check Web Serial support & detect Brave
+  // Check Web Serial support
   useEffect(() => {
     if (typeof window !== "undefined") {
       setIsSerialSupported("serial" in navigator);
-      const nav = navigator as any;
-      if (nav.brave && typeof nav.brave.isBrave === "function") {
-        nav.brave.isBrave().then((brave: boolean) => {
-          setIsBrave(brave);
-        }).catch(() => {});
-      }
     }
   }, []);
 
@@ -604,29 +597,6 @@ export function LiveEcgMonitor() {
           </Button>
         </div>
       </div>
-
-      {/* Brave Browser Shield Warning */}
-      {isBrave && (
-        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-xs animate-in fade-in duration-200">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              Brave Browser Detected &mdash; Web Serial Blocked by Default
-            </div>
-            <p className="text-amber-800 leading-relaxed">
-              Brave Shields block direct USB/Serial device enumeration by default, resulting in &quot;No compatible devices found&quot;.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
-                &bull; Quick Fix 1 (Recommended): Open in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.
-              </span>
-              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
-                &bull; Quick Fix 2: Click the orange <strong>Brave Lion Shield</strong> icon next to the URL bar &rarr; turn Shields <strong>OFF</strong> for this site.
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Hardware Troubleshooting Modal/Card */}
       {showTroubleshoot && (
