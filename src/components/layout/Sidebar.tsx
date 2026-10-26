@@ -20,6 +20,7 @@ import {
   HeartPulse,
   LogIn,
   Ambulance,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/lib/subscription/SubscriptionContext";
@@ -47,6 +48,7 @@ function useIsOnboarding(pathname: string): boolean {
 function getNavItems(t: (key: TranslationKey) => string) {
   return [
     { href: "/dashboard", label: t("nav.overview"), icon: LayoutDashboard },
+    { href: "/monitor", label: "Live ECG Monitor", icon: Activity, isLive: true },
     { href: "/health-record", label: t("nav.healthRecord"), icon: HeartPulse },
     { href: "/trends", label: t("nav.trends"), icon: BarChart3 },
     { href: "/nutri-agent", label: t("nav.nutriAgent"), icon: Salad },
@@ -100,14 +102,21 @@ export function Sidebar() {
               href={item.href}
               data-tour-id={tourId}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-navy-900 text-white"
                   : "text-navy-600 hover:bg-navy-50 hover:text-navy-900"
               )}
             >
-              <Icon className="w-4 h-4" />
-              {item.label}
+              <div className="flex items-center gap-3">
+                <Icon className="w-4 h-4" />
+                {item.label}
+              </div>
+              {(item as any).isLive && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cardiac text-white tracking-wide uppercase animate-pulse">
+                  Live
+                </span>
+              )}
             </Link>
           );
           
@@ -253,8 +262,15 @@ export function MobileNav() {
                       isActive ? "bg-navy-900 text-white" : "text-navy-600 hover:bg-navy-50"
                     )}
                   >
-                    <Icon className="w-4 h-4" />
-                    {item.label}
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-4 h-4" />
+                      {item.label}
+                    </div>
+                    {(item as any).isLive && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cardiac text-white tracking-wide uppercase animate-pulse">
+                        Live
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -285,6 +301,7 @@ export function AppHeader() {
 
   const titles: Record<string, string> = {
     "/dashboard": t("header.cardiovascularDashboard"),
+    "/monitor": "Real-Time ECG Hardware Monitor",
     "/trends": t("header.longTermTrends"),
     "/nutri-agent": t("nav.nutriAgent"),
     "/health-record": t("header.myHealthRecord"),

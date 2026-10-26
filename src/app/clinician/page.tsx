@@ -191,13 +191,22 @@ export default function ClinicianPage() {
                     <p className="text-xs text-navy-500">{userEmail} · Connected Health Record Profile</p>
                   </div>
                 </div>
-                <Link
-                  href="/health-record"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-cardiac hover:text-red-700 transition-colors"
-                >
-                  Edit Health Record
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    href="/monitor"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cardiac hover:bg-red-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    Open Live ECG Monitor
+                  </Link>
+                  <Link
+                    href="/health-record"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-navy-600 hover:text-navy-900 transition-colors px-2.5 py-1.5 rounded-lg border border-navy-200 hover:bg-navy-50"
+                  >
+                    Edit Record
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
               </div>
 
               {/* Verified User Vitals Strip */}
