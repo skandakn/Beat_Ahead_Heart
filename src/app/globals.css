@@ -25,11 +25,18 @@
   }
 
   body {
-    @apply bg-navy-50 text-navy-900 antialiased;
+    @apply bg-navy-50 text-navy-900 antialiased selection:bg-red-500/20 selection:text-navy-900;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
 @layer utilities {
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
   .glass-card {
     @apply bg-white/70 backdrop-blur-md border border-white/30 shadow-glass rounded-xl;
   }

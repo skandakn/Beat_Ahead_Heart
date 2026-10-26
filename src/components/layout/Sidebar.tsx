@@ -195,8 +195,8 @@ export function MobileNav() {
   return (
     <>
       {/* Bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-navy-100 safe-area-pb">
-        <div className="flex items-center justify-around py-2">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/90 backdrop-blur-lg border-t border-navy-100 shadow-lg pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="flex items-center justify-around px-2 py-1.5">
           {mobileItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -205,21 +205,23 @@ export function MobileNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-xs transition-colors",
-                  isActive ? "text-navy-900" : "text-navy-400"
+                  "flex flex-col items-center justify-center gap-0.5 py-1 px-2.5 rounded-xl text-[11px] font-medium transition-all duration-200 min-w-[56px]",
+                  isActive
+                    ? "text-cardiac font-semibold bg-red-50/70"
+                    : "text-navy-500 hover:text-navy-900 active:scale-95"
                 )}
               >
-                <Icon className={cn("w-5 h-5", isActive && "text-cardiac")} />
-                <span className="truncate max-w-[60px]">{item.label.split(" ")[0]}</span>
+                <Icon className={cn("w-5 h-5 transition-transform", isActive ? "text-cardiac scale-110" : "text-navy-400")} />
+                <span className="truncate max-w-[62px] tracking-tight">{item.label.split(" ")[0]}</span>
               </Link>
             );
           })}
           <button
             onClick={() => setOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-2 py-1 text-navy-400"
+            className="flex flex-col items-center justify-center gap-0.5 py-1 px-2.5 rounded-xl text-[11px] font-medium text-navy-500 hover:text-navy-900 active:scale-95 min-w-[56px]"
           >
-            <Menu className="w-5 h-5" />
-            <span className="text-xs">{t("common.more")}</span>
+            <Menu className="w-5 h-5 text-navy-400" />
+            <span className="tracking-tight">{t("common.more")}</span>
           </button>
         </div>
       </nav>

@@ -640,25 +640,28 @@ export function CardiacVoiceWidget() {
     <>
       {/* Floating Trigger Button */}
       {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
+        <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-40 flex items-center gap-3">
           <button
             onClick={() => setIsOpen(true)}
             aria-label="Open 24/7 Beat Ahead Assistant"
-            className="group relative flex items-center gap-3 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-700 px-5 py-3.5 text-white shadow-2xl shadow-red-600/40 transition-all duration-300 hover:scale-105 hover:shadow-red-600/60 focus:outline-none focus:ring-4 focus:ring-red-500/30"
+            className="group relative flex items-center gap-2.5 sm:gap-3 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-700 px-3.5 py-2.5 sm:px-5 sm:py-3.5 text-white shadow-2xl shadow-red-600/40 transition-all duration-300 hover:scale-105 hover:shadow-red-600/60 focus:outline-none focus:ring-4 focus:ring-red-500/30"
           >
             <span className="absolute -inset-1 rounded-full bg-red-500/30 opacity-75 blur-sm animate-pulse group-hover:opacity-100" />
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-              <HeartPulse className="h-5 w-5 text-white animate-pulse" />
+            <div className="relative flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white/20">
+              <HeartPulse className="h-4 w-4 sm:h-5 sm:w-5 text-white animate-pulse" />
             </div>
-            <div className="relative text-left">
-              <p className="text-xs font-bold uppercase tracking-wider text-red-100">
+            <div className="relative text-left hidden sm:block">
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-red-100">
                 24/7 Beat Ahead
               </p>
-              <p className="text-sm font-extrabold tracking-tight">Assistant</p>
+              <p className="text-xs sm:text-sm font-extrabold tracking-tight">Assistant</p>
             </div>
-            <div className="relative ml-1 flex h-3 w-3">
+            <div className="relative text-left sm:hidden">
+              <p className="text-xs font-extrabold tracking-tight">AI Triage</p>
+            </div>
+            <div className="relative ml-0.5 sm:ml-1 flex h-2.5 w-2.5 sm:h-3 sm:w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-emerald-500"></span>
             </div>
           </button>
         </div>
@@ -666,7 +669,7 @@ export function CardiacVoiceWidget() {
 
       {/* Floating Modal / Widget Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 flex h-[620px] w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-red-500/30 bg-slate-950/95 text-slate-100 shadow-2xl shadow-red-950/50 backdrop-blur-xl transition-all">
+        <div className="fixed inset-x-2 bottom-20 top-16 sm:top-auto sm:inset-x-auto sm:bottom-6 sm:right-6 z-50 flex sm:h-[620px] sm:w-[420px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-red-500/30 bg-slate-950/95 text-slate-100 shadow-2xl shadow-red-950/50 backdrop-blur-xl transition-all">
           {/* Header */}
           <div className="relative border-b border-slate-800 bg-gradient-to-r from-slate-900 via-red-950/40 to-slate-900 p-4">
             <div className="flex items-center justify-between">
