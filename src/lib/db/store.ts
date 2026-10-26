@@ -45,7 +45,6 @@ function ensureDirectoryExists() {
 
 const PREMIUM_ACCOUNTS = [
   "skandakn13@gmail.com",
-  "schiru330@gmail.com",
 ];
 
 function isWhitelistedUser(userId?: string): boolean {
@@ -53,8 +52,7 @@ function isWhitelistedUser(userId?: string): boolean {
   const lower = userId.toLowerCase();
   return (
     PREMIUM_ACCOUNTS.some((email) => lower === email.toLowerCase()) ||
-    lower.includes("skandakn13") ||
-    lower.includes("schiru330")
+    lower.includes("skandakn13")
   );
 }
 

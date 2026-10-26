@@ -28,7 +28,6 @@ const SubscriptionContext = createContext<SubscriptionContextType | null>(null);
 
 export const PREMIUM_ACCOUNTS = [
   "skandakn13@gmail.com",
-  "schiru330@gmail.com",
 ];
 
 export function isPremiumAccount(email?: string | null): boolean {
