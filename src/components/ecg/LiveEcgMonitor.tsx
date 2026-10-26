@@ -62,6 +62,7 @@ export function LiveEcgMonitor() {
   const [sqi, setSqi] = useState<number>(96);
   const [sampleRate, setSampleRate] = useState<number>(250);
   const [samplesReceived, setSamplesReceived] = useState<number>(0);
+  const [processingStatus, setProcessingStatus] = useState<string>("Waiting for signal...");
 
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -70,7 +71,8 @@ export function LiveEcgMonitor() {
   const isReadingRef = useRef<boolean>(false);
 
   // Signal processing buffers
-  const bufferRef = useRef<number[]>([]);
+  const bufferRef = useRef<number[]>([]);           // canvas render buffer
+  const analysisBufferRef = useRef<number[]>([]);   // 4-second sliding window for ISI/QRS analysis
   const sweepXRef = useRef<number>(0);
   const lastYRef = useRef<number>(0);
   const samplesSecCountRef = useRef<number>(0);
@@ -196,6 +198,11 @@ export function LiveEcgMonitor() {
               if (!isNaN(adc)) {
                 setLeadsOff(false);
                 bufferRef.current.push(adc);
+                // Also feed 4-second sliding analysis window (max 1000 samples @ 250Hz)
+                analysisBufferRef.current.push(adc);
+                if (analysisBufferRef.current.length > 1000) {
+                  analysisBufferRef.current.shift();
+                }
                 samplesSecCountRef.current += 1;
                 // Update debug stats
                 setAdcMin(m => Math.min(m, adc));
@@ -229,6 +236,56 @@ export function LiveEcgMonitor() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Live Hardware ECG Analysis Pipeline — runs every 2s when Arduino connected
+  // Sends real ADC samples to /api/ecg/process and updates ISI, ST, HR, SQI
+  useEffect(() => {
+    if (!isConnected || preset !== "arduino") return;
+
+    const analysisInterval = setInterval(async () => {
+      const window = [...analysisBufferRef.current];
+      // Need at least 2 seconds of data (500 samples @ 250Hz) for reliable QRS detection
+      if (window.length < 500) {
+        setProcessingStatus(`Collecting samples... (${window.length}/500)`);
+        return;
+      }
+
+      try {
+        setProcessingStatus("Processing ECG window...");
+        const res = await fetch("/api/ecg/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            samples: window,
+            sampling_rate: sampleRate > 50 ? sampleRate : 250,
+          }),
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "success") {
+          // Update all telemetry metrics from real ECG signal
+          if (data.heart_rate_bpm >= 30 && data.heart_rate_bpm <= 220) {
+            setHeartRate(data.heart_rate_bpm);
+          }
+          setStDeviationMm(data.st_deviation_mm ?? 0);
+          setIsiScore(data.isi_score ?? 14);
+          setSqi(data.signal_quality_percent ?? 80);
+
+          const peaks = data.r_peaks?.length ?? 0;
+          const stMm = (data.st_deviation_mm ?? 0).toFixed(2);
+          setProcessingStatus(
+            `Live: ${peaks} QRS detected | ST ${stMm >= "0" ? "+" : ""}${stMm} mm | ${data.risk_tier}`
+          );
+        }
+      } catch {
+        setProcessingStatus("Analysis error — retrying...");
+      }
+    }, 2000); // Analyse every 2 seconds
+
+    return () => clearInterval(analysisInterval);
+  }, [isConnected, preset, sampleRate]);
 
   // Synthetic Waveform Generator (when Arduino not connected or preset active)
   useEffect(() => {
@@ -698,6 +755,13 @@ export function LiveEcgMonitor() {
       )}
 
       {/* 4 Primary Telemetry Stat Cards */}
+      {/* Processing status bar — shows live analysis pipeline status when hardware connected */}
+      {isConnected && preset === "arduino" && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-navy-950/80 rounded-lg border border-navy-800 text-[11px] text-emerald-400 font-mono">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="truncate">{processingStatus}</span>
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Heart Rate */}
         <Card className="border-navy-100 shadow-xs">
