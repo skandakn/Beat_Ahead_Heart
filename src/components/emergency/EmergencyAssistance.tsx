@@ -298,49 +298,7 @@ export function EmergencyAssistance({ onClose, isModal = false }: EmergencyAssis
         </div>
       )}
 
-      {/* ─── PRIMARY ACTION 1: CALL EMERGENCY SERVICES (112) (Item 7 & 12) ─── */}
-      <div className="mb-6">
-        <a
-          href={EMERGENCY_SERVICES_TEL}
-          onClick={(e) => {
-            e.preventDefault();
-            handleInitiateCall({
-              phoneNumber: EMERGENCY_SERVICES_NUMBER,
-              facilityName: "Emergency Services (112)",
-              isEmergency112: true,
-            });
-          }}
-          className="group relative flex items-center justify-between gap-4 w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-600 via-red-600 to-rose-700 text-white shadow-lg shadow-red-600/30 hover:shadow-xl hover:shadow-red-600/40 hover:from-red-500 hover:to-rose-600 transition-all duration-200 active:scale-[0.99] border-2 border-red-500 cursor-pointer"
-          data-testid="emergency-services-button"
-        >
-          <div className="flex items-center gap-3.5 sm:gap-4">
-            <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm group-hover:scale-105 transition-transform shrink-0">
-              <Phone className="h-6 w-6 sm:h-7 sm:w-7 text-white fill-white" />
-            </div>
-            <div className="text-left">
-              <span className="inline-block px-2 py-0.5 rounded-full bg-white/25 text-[11px] font-extrabold uppercase tracking-wider text-white mb-1">
-                🚨 Immediate Action
-              </span>
-              <h2 className="text-lg sm:text-2xl font-black tracking-tight leading-tight">
-                CALL EMERGENCY SERVICES — 112
-              </h2>
-              <p className="text-xs sm:text-sm text-red-100 font-medium mt-0.5">
-                National Emergency Number • Medical, Ambulance & Police
-              </p>
-            </div>
-          </div>
 
-          <div className="hidden sm:flex flex-col items-end text-right shrink-0">
-            <span className="text-xs uppercase tracking-wider font-semibold text-red-100">
-              Toll-Free 24/7
-            </span>
-            <span className="text-2xl font-black tracking-tight">112</span>
-          </div>
-        </a>
-        <p className="text-[11px] text-navy-400 mt-2 px-1 text-center sm:text-left">
-          *BeatAhead connects directly to your phone dialer. BeatAhead does not itself operate an emergency dispatch or ambulance service.
-        </p>
-      </div>
 
       {/* ─── PRIMARY ACTION 2: SHARE MY LOCATION (Item 8) ─── */}
       <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-navy-50/80 border border-navy-100">
