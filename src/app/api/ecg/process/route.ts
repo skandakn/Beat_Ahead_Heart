@@ -155,12 +155,16 @@ export async function POST(request: Request) {
     let isiScore = 14;
     if (isIschemicAlert) {
       riskTier = "High Risk / Acute Ischemic ST Depression";
-      isiScore = Math.min(95, Math.max(72, Math.round(75 + Math.abs(stMm) * 10)));
+      isiScore = Math.min(95, Math.max(72, Math.round(72 + Math.abs(stMm) * 12 + Math.max(0, bpm - 70) * 0.35)));
     } else if (isMildSagging) {
       riskTier = "Elevated Stress / ST Sagging";
-      isiScore = Math.min(65, Math.max(48, Math.round(50 + Math.abs(stMm) * 10)));
+      isiScore = Math.min(68, Math.max(45, Math.round(48 + Math.abs(stMm) * 15 + Math.max(0, bpm - 70) * 0.4)));
     } else {
-      isiScore = Math.max(10, Math.min(28, Math.round(15 + (bpm > 80 ? (bpm - 80) * 0.4 : 0))));
+      // Dynamic physiological ISI scale (11 to 38 based on instantaneous cardiac workload and ST level)
+      const hrLoad = Math.max(0, (bpm - 60)) * 0.42;
+      const stLoad = Math.abs(stMm) * 14.0;
+      const hrvMod = Math.max(0, (35 - rmssd) * 0.2);
+      isiScore = Math.max(11, Math.min(38, Math.round(12 + hrLoad + stLoad + hrvMod)));
     }
 
     // Signal Quality

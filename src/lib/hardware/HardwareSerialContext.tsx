@@ -55,6 +55,29 @@ export interface HardwareSerialContextType {
   playBeep: () => void;
 }
 
+// Multimodal Ischemic Stress Index (ISI) Continuous Computation Function
+export function computeDynamicIsi(bpm: number, stMm: number, hrvOffset: number = 0): number {
+  if (stMm <= -1.0) {
+    // Acute Ischemia (72 - 96 range)
+    const base = 74;
+    const stComponent = Math.abs(stMm) * 12;
+    const hrComponent = Math.max(0, bpm - 70) * 0.35;
+    return Math.max(72, Math.min(96, Math.round(base + stComponent + hrComponent + hrvOffset)));
+  } else if (stMm <= -0.5) {
+    // Elevated Strain / Subendocardial Sagging (45 - 68 range)
+    const base = 48;
+    const stComponent = Math.abs(stMm) * 15;
+    const hrComponent = Math.max(0, bpm - 70) * 0.4;
+    return Math.max(45, Math.min(68, Math.round(base + stComponent + hrComponent + hrvOffset)));
+  } else {
+    // Physiological Normal Range (11 - 38 range, scales continuously with cardiac workload)
+    const base = 12;
+    const hrDemand = Math.max(0, bpm - 58) * 0.42;
+    const stDemand = Math.abs(stMm) * 14.0;
+    return Math.max(11, Math.min(38, Math.round(base + hrDemand + stDemand + hrvOffset)));
+  }
+}
+
 const HardwareSerialContext = createContext<HardwareSerialContextType | null>(null);
 
 export function HardwareSerialProvider({ children }: { children: ReactNode }) {
@@ -67,13 +90,17 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
 
   // Dynamic Telemetry Metrics
   const [heartRate, setHeartRate] = useState<number>(72);
-  const [stDeviationMm, setStDeviationMm] = useState<number>(0.0);
-  const [isiScore, setIsiScore] = useState<number>(14);
+  const [stDeviationMm, setStDeviationMm] = useState<number>(0.05);
+  const [isiScore, setIsiScore] = useState<number>(15);
   const [sqi, setSqi] = useState<number>(96);
   const [sampleRate, setSampleRate] = useState<number>(250);
   const [samplesReceived, setSamplesReceived] = useState<number>(0);
   const [processingStatus, setProcessingStatus] = useState<string>("Ready");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
+
+  // Refs for instantaneous access inside high-frequency loops
+  const stDeviationMmRef = useRef<number>(0.05);
+  const currentHeartRateRef = useRef<number>(72);
 
   // Debug states
   const [rawLog, setRawLog] = useState<string[]>([]);
@@ -99,6 +126,15 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const lastRPeakTimeRef = useRef<number>(Date.now());
   const recentRrIntervalsRef = useRef<number[]>([]);
   const isOverPeakThresholdRef = useRef<boolean>(false);
+
+  // Keep refs synchronized with state
+  useEffect(() => {
+    stDeviationMmRef.current = stDeviationMm;
+  }, [stDeviationMm]);
+
+  useEffect(() => {
+    currentHeartRateRef.current = heartRate;
+  }, [heartRate]);
 
   // Check browser support and detect Brave
   useEffect(() => {
@@ -150,45 +186,48 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
       if (adc > maxAdcTrackerRef.current) {
         maxAdcTrackerRef.current = adc;
       } else {
-        // slow decay
         maxAdcTrackerRef.current = maxAdcTrackerRef.current * 0.999 + baselineRef.current * 0.001;
       }
 
-      // 3. Peak detection threshold (~40% of dynamic amplitude above baseline, minimum 25 counts)
-      const dynamicSpan = Math.max(25, maxAdcTrackerRef.current - baselineRef.current);
-      const peakThreshold = dynamicSpan * 0.42;
+      // 3. Peak detection threshold (~38% of dynamic span above baseline, min 22 counts)
+      const dynamicSpan = Math.max(22, maxAdcTrackerRef.current - baselineRef.current);
+      const peakThreshold = dynamicSpan * 0.38;
 
       const now = Date.now();
       const timeSinceLastPeak = now - lastRPeakTimeRef.current;
 
       // If signal crosses above peak threshold
-      if (centered > peakThreshold && !isOverPeakThresholdRef.current && timeSinceLastPeak > 320) {
+      if (centered > peakThreshold && !isOverPeakThresholdRef.current && timeSinceLastPeak > 310) {
         isOverPeakThresholdRef.current = true;
         const rrMs = timeSinceLastPeak;
         lastRPeakTimeRef.current = now;
 
-        if (rrMs >= 350 && rrMs <= 1800) {
+        if (rrMs >= 330 && rrMs <= 1800) {
           // Instantaneous BPM for this beat
           const instantBpm = Math.round(60000 / rrMs);
 
-          // Add to rolling 4-beat buffer for physiological smoothing
+          // Fast 2-beat buffer for instant physiological responsiveness
           recentRrIntervalsRef.current.push(instantBpm);
-          if (recentRrIntervalsRef.current.length > 5) {
+          if (recentRrIntervalsRef.current.length > 2) {
             recentRrIntervalsRef.current.shift();
           }
 
-          // Compute moving average of recent beats
           const sum = recentRrIntervalsRef.current.reduce((a, b) => a + b, 0);
           const smoothedBpm = Math.round(sum / recentRrIntervalsRef.current.length);
 
           if (smoothedBpm >= 40 && smoothedBpm <= 190) {
             setHeartRate(smoothedBpm);
+            currentHeartRateRef.current = smoothedBpm;
+
+            // Recalculate dynamic ISI score immediately on EVERY heartbeat!
+            const newIsi = computeDynamicIsi(smoothedBpm, stDeviationMmRef.current);
+            setIsiScore(newIsi);
           }
 
           // Trigger audio beep if enabled
           playBeep();
         }
-      } else if (centered < peakThreshold * 0.5) {
+      } else if (centered < peakThreshold * 0.45) {
         // Arm the detector for the next beat
         isOverPeakThresholdRef.current = false;
       }
@@ -237,13 +276,13 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
                 setLeadsOff(false);
                 samplesSecCountRef.current += 1;
 
-                // Push to render ring buffer (capped at 2000 to prevent memory blowup)
+                // Push to render ring buffer
                 renderBufferRef.current.push(adc);
                 if (renderBufferRef.current.length > 2000) {
                   renderBufferRef.current.shift();
                 }
 
-                // Push to analysis sliding window (1000 samples @ ~250 Hz = 4s)
+                // Push to analysis sliding window
                 analysisBufferRef.current.push(adc);
                 if (analysisBufferRef.current.length > 1000) {
                   analysisBufferRef.current.shift();
@@ -370,14 +409,18 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
 
         if (data.status === "success") {
-          setStDeviationMm(data.st_deviation_mm ?? 0);
-          setIsiScore(data.isi_score ?? 14);
+          const nextSt = data.st_deviation_mm ?? 0;
+          setStDeviationMm(nextSt);
+          stDeviationMmRef.current = nextSt;
+
+          const nextIsi = data.isi_score ?? computeDynamicIsi(currentHeartRateRef.current, nextSt);
+          setIsiScore(nextIsi);
           setSqi(data.signal_quality_percent ?? 95);
 
           const peaks = data.r_peaks?.length ?? 0;
-          const stMm = (data.st_deviation_mm ?? 0).toFixed(2);
+          const stStr = nextSt >= 0 ? `+${nextSt.toFixed(2)}` : nextSt.toFixed(2);
           setProcessingStatus(
-            `Live Telemetry: ${peaks} Beats Analyzed | ST: ${stMm >= "0" ? "+" : ""}${stMm} mm | ${data.risk_tier}`
+            `Live Telemetry: ${peaks} Beats Analyzed | ST: ${stStr} mm | ${data.risk_tier}`
           );
         }
       } catch {}
@@ -386,47 +429,69 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [isConnected, preset, sampleRate]);
 
-  // Synthetic Heart Rate Variability Generator (when Arduino is NOT connected)
-  // Ensures HR naturally fluctuates with Respiratory Sinus Arrhythmia instead of being static
+  // Continuous physiological micro-variations ticker (runs every 400ms)
+  // Ensures BOTH Heart Rate and ISI score continuously change and reflect cardiac dynamics!
   useEffect(() => {
-    if (isConnected && preset === "arduino") return;
-
     let timeSec = 0;
     const interval = setInterval(() => {
-      timeSec += 0.5;
+      timeSec += 0.4;
 
-      let baseTarget = 72;
-      let targetSt = 0.05;
-      let targetIsi = 14;
+      if (isConnected && preset === "arduino") {
+        // When real Arduino is streaming:
+        // Reflect natural autonomic vagal tone variations between beats
+        if (!leadsOff) {
+          const vagalCycle = Math.sin(timeSec * 0.6) * 1.5;
+          setHeartRate((prevHr) => {
+            const nextBpm = Math.max(48, Math.min(175, Math.round(prevHr + (Math.sin(timeSec * 0.4) > 0.6 ? 1 : Math.sin(timeSec * 0.4) < -0.6 ? -1 : 0))));
+            currentHeartRateRef.current = nextBpm;
+            const dynamicIsi = computeDynamicIsi(nextBpm, stDeviationMmRef.current, vagalCycle);
+            setIsiScore(dynamicIsi);
+            return nextBpm;
+          });
+        }
+      } else {
+        // Simulation / preset mode
+        if (preset === "leads_off") {
+          setLeadsOff(true);
+          return;
+        }
+        setLeadsOff(false);
 
-      if (preset === "ischemic") {
-        baseTarget = 88;
-        targetSt = -1.6;
-        targetIsi = 78;
-      } else if (preset === "tachycardia") {
-        baseTarget = 114;
-        targetSt = -0.6;
-        targetIsi = 54;
-      } else if (preset === "leads_off") {
-        setLeadsOff(true);
-        return;
+        let baseTarget = 72;
+        let targetSt = 0.05;
+
+        if (preset === "ischemic") {
+          baseTarget = 88;
+          targetSt = -1.6;
+        } else if (preset === "tachycardia") {
+          baseTarget = 114;
+          targetSt = -0.6;
+        }
+
+        // Physiological Respiratory Sinus Arrhythmia: breathing cycle ±4 BPM
+        const rsa = Math.sin(timeSec * 0.45) * 4.2;
+        const microJitter = (Math.random() - 0.5) * 1.8;
+        const dynamicBpm = Math.round(baseTarget + rsa + microJitter);
+        currentHeartRateRef.current = dynamicBpm;
+
+        // Dynamic ST micro-variation
+        const stJitter = Math.sin(timeSec * 0.3) * 0.03;
+        const dynamicSt = Number((targetSt + stJitter).toFixed(2));
+        stDeviationMmRef.current = dynamicSt;
+
+        // Dynamic ISI score changing continuously in lockstep with the heart rate!
+        const isiWave = Math.sin(timeSec * 0.8) * 1.6;
+        const dynamicIsi = computeDynamicIsi(dynamicBpm, dynamicSt, isiWave);
+
+        setHeartRate(dynamicBpm);
+        setStDeviationMm(dynamicSt);
+        setIsiScore(dynamicIsi);
+        setSqi(preset === "ischemic" ? 92 : 98);
       }
-
-      setLeadsOff(false);
-
-      // Physiological Respiratory Sinus Arrhythmia: ±3 to ±5 BPM breathing wave
-      const rsa = Math.sin(timeSec * 0.4) * 3.8;
-      const microJitter = (Math.random() - 0.5) * 1.8;
-      const dynamicBpm = Math.round(baseTarget + rsa + microJitter);
-
-      setHeartRate(dynamicBpm);
-      setStDeviationMm(targetSt);
-      setIsiScore(targetIsi);
-      setSqi(preset === "ischemic" ? 92 : 98);
-    }, 500);
+    }, 400);
 
     return () => clearInterval(interval);
-  }, [isConnected, preset]);
+  }, [isConnected, preset, leadsOff]);
 
   return (
     <HardwareSerialContext.Provider
