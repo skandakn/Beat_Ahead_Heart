@@ -1,5 +1,5 @@
-﻿import { LLMResponse, LLMGenerateOptions } from "../../types/providers";
-import { extractCardiacFindings } from "../../extraction/deterministic-extractor";
+import { LLMResponse, LLMGenerateOptions } from "../types/providers";
+import { extractCardiacFindings } from "./deterministic-extractor";
 
 export function generateEmergencyCardiacFallback(
   userText: string,

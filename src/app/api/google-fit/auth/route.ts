@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getGoogleClientId } from "@/lib/google-fit/credentials";
 
 /**
  * GET /api/google-fit/auth
@@ -6,7 +7,7 @@ import { NextResponse } from "next/server";
  * read-only access to their Google Fit activity data.
  */
 export async function GET(request: Request) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = getGoogleClientId();
 
   if (!clientId) {
     return NextResponse.json(
