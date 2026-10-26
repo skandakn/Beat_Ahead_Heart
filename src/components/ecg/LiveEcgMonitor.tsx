@@ -22,6 +22,10 @@ import {
   ArrowDownUp,
   Volume2,
   VolumeX,
+  HelpCircle,
+  ExternalLink,
+  Terminal,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +34,8 @@ type SimulationPreset = "arduino" | "normal" | "ischemic" | "tachycardia" | "lea
 export function LiveEcgMonitor() {
   // Connection states
   const [isSerialSupported, setIsSerialSupported] = useState<boolean>(true);
+  const [isBrave, setIsBrave] = useState<boolean>(false);
+  const [showTroubleshoot, setShowTroubleshoot] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [portName, setPortName] = useState<string>("Disconnected");
   const [preset, setPreset] = useState<SimulationPreset>("normal");
@@ -64,10 +70,16 @@ export function LiveEcgMonitor() {
   const rPeakTimeRef = useRef<number>(Date.now());
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Check Web Serial support
+  // Check Web Serial support & detect Brave
   useEffect(() => {
     if (typeof window !== "undefined") {
       setIsSerialSupported("serial" in navigator);
+      const nav = navigator as any;
+      if (nav.brave && typeof nav.brave.isBrave === "function") {
+        nav.brave.isBrave().then((brave: boolean) => {
+          setIsBrave(brave);
+        }).catch(() => {});
+      }
     }
   }, []);
 
@@ -99,6 +111,7 @@ export function LiveEcgMonitor() {
   const connectSerial = async () => {
     if (!("serial" in navigator)) {
       alert("Web Serial is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
+      setShowTroubleshoot(true);
       return;
     }
 
@@ -109,12 +122,15 @@ export function LiveEcgMonitor() {
       setIsConnected(true);
       setPreset("arduino");
       setPortName("Arduino Uno (USB)");
+      setShowTroubleshoot(false);
 
       isReadingRef.current = true;
       readSerialLoop(port);
     } catch (err: any) {
       console.warn("Serial connection canceled or failed:", err);
       setIsConnected(false);
+      // Auto-show troubleshooting if no device was selected or error occurred
+      setShowTroubleshoot(true);
     }
   };
 
@@ -459,6 +475,17 @@ export function LiveEcgMonitor() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setShowTroubleshoot(!showTroubleshoot)}
+            className="border-navy-200 text-navy-700 hover:bg-navy-50"
+            title="Hardware Connection Help & Troubleshooting"
+          >
+            <HelpCircle className="w-4 h-4 mr-1 text-indigo-600" />
+            USB Help
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setIsFrozen(!isFrozen)}
             className="border-navy-200 text-navy-700"
           >
@@ -477,6 +504,96 @@ export function LiveEcgMonitor() {
           </Button>
         </div>
       </div>
+
+      {/* Brave Browser Shield Warning */}
+      {isBrave && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-xs animate-in fade-in duration-200">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-bold flex items-center gap-1.5">
+              Brave Browser Detected &mdash; Web Serial Blocked by Default
+            </div>
+            <p className="text-amber-800 leading-relaxed">
+              Brave Shields block direct USB/Serial device enumeration by default, resulting in &quot;No compatible devices found&quot;.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
+                &bull; Quick Fix 1 (Recommended): Open in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.
+              </span>
+              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
+                &bull; Quick Fix 2: Click the orange <strong>Brave Lion Shield</strong> icon next to the URL bar &rarr; turn Shields <strong>OFF</strong> for this site.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hardware Troubleshooting Modal/Card */}
+      {showTroubleshoot && (
+        <Card className="border-indigo-200 bg-indigo-50/40 shadow-sm animate-in fade-in duration-200">
+          <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-cardiac" />
+              Fix: &quot;No compatible devices found&quot; in Browser
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-navy-400 hover:text-navy-700"
+              onClick={() => setShowTroubleshoot(false)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3 text-xs text-navy-700">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                <div className="font-bold text-navy-900 flex items-center gap-1.5 text-xs text-red-600">
+                  Step 1. Close Arduino IDE
+                </div>
+                <p className="mt-1 text-navy-600 leading-relaxed text-[11px]">
+                  On Windows, only <strong>ONE app</strong> can open COM16 at a time. If the <strong>Serial Monitor</strong> or <strong>Serial Plotter</strong> is open in Arduino IDE, close that window now!
+                </p>
+              </div>
+
+              <div className="p-3 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                <div className="font-bold text-navy-900 flex items-center gap-1.5 text-xs text-indigo-600">
+                  Step 2. Use Chrome or Edge
+                </div>
+                <p className="mt-1 text-navy-600 leading-relaxed text-[11px]">
+                  Brave and Firefox do not expose native Web Serial by default. Opening this link in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> works plug-and-play.
+                </p>
+              </div>
+
+              <div className="p-3 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                <div className="font-bold text-navy-900 flex items-center gap-1.5 text-xs text-emerald-600">
+                  Step 3. Re-plug USB Cable
+                </div>
+                <p className="mt-1 text-navy-600 leading-relaxed text-[11px]">
+                  Unplug your Arduino USB cable from your laptop and plug it back in. Then click <strong>&quot;Connect Arduino USB&quot;</strong>, select <strong>Arduino Uno (COM16)</strong>, and click <strong>Connect</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-white rounded-lg border border-navy-100 flex items-center justify-between flex-wrap gap-2 text-[11px]">
+              <span className="text-navy-600">
+                <strong>Local CLI Option:</strong> You can also run the Python bridge directly:
+                <code className="ml-1 px-1.5 py-0.5 bg-navy-100 rounded text-navy-800 font-mono">
+                  python scripts/arduino_ecg_bridge.py --port COM16
+                </code>
+              </span>
+              <Button
+                size="sm"
+                onClick={connectSerial}
+                className="bg-cardiac hover:bg-red-700 text-white font-semibold text-xs h-7 shadow-xs"
+              >
+                <Usb className="w-3.5 h-3.5 mr-1" />
+                Retry Web Serial Connect
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 4 Primary Telemetry Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
