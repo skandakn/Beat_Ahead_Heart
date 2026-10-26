@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
       "pk_test_cHJvdmVuLWhlbi00MDgyLmNsZXJrLmFjY291bnRzLmRldiQ",
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY || fallbackSecret,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
   },
 };
 
