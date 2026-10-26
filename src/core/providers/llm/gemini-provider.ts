@@ -10,6 +10,7 @@ import {
   FieldDefinition,
 } from '../../types/schema';
 import { SchemaValidator } from '../../extraction/schema-validator';
+import { generateEmergencyCardiacFallback } from '../../extraction/cardiac-clinical-brain';
 
 export interface GeminiProviderConfig {
   apiKey?: string;
@@ -103,8 +104,11 @@ export class GeminiProvider implements LLMProvider {
    * Generates conversational AI response, handling tools and prompt-injection defenses.
    */
   public async generateResponse(options: LLMGenerateOptions): Promise<LLMResponse> {
+    const lastUserMsg = [...options.messages].reverse().find((m) => m.role === 'user');
+    const userText = lastUserMsg?.content || '';
+
     if (!this.apiKey) {
-      throw new Error('Gemini API Key is not configured. Set GEMINI_API_KEY in environment variables.');
+      return generateEmergencyCardiacFallback(userText, options);
     }
 
     // Format messages for Gemini API
@@ -159,7 +163,15 @@ export class GeminiProvider implements LLMProvider {
       requestBody.tools = [{ functionDeclarations }];
     }
 
-    const data = await this.executeWithRetryAndFallback(requestBody);
+    let data: any;
+    try {
+      data = await this.executeWithRetryAndFallback(requestBody);
+    } catch (err) {
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.warn('[GeminiProvider] Network/API call failed, engaging emergency triage fallback:', err);
+      }
+      return generateEmergencyCardiacFallback(userText, options);
+    }
     const candidate = data.candidates?.[0];
     const parts = candidate?.content?.parts || [];
 
