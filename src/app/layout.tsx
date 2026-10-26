@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { BeatAheadAuthProvider } from "@/lib/auth/ClerkAuthWrapper";
@@ -12,16 +12,32 @@ import { CardiacVoiceWidget } from "@/components/voice/CardiacVoiceWidget";
 import { TourProvider } from "@/lib/tour/TourContext";
 import { GuidedTour } from "@/components/tour/GuidedTour";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
+import { PWAInstallPrompt } from "@/components/pwa/PWAInstallPrompt";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0F172A",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "BeatAhead — Ischemic Stress Index",
   description:
     "AI Framework for Early Cardiac Risk Assessment. Multimodal physiological signal fusion for personalized risk-trend screening.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "BeatAhead",
+  },
   keywords: ["cardiac", "ISI", "wearable", "HRV", "healthcare AI", "physiological monitoring"],
   authors: [{ name: "BeatAhead" }],
   openGraph: {
@@ -51,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <TooltipProvider>
                   <TourProvider>
                     <GuidedTour />
+                    <PWAInstallPrompt />
                     <Sidebar />
                     <AppContentWrapper>{children}</AppContentWrapper>
                     <MobileNav />

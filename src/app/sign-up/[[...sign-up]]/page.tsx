@@ -38,11 +38,11 @@ export default function SignUpPage() {
 
   const handleCustomGoogleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customGoogleEmail) return;
+    const targetEmail = customGoogleEmail.trim() || "skandakn13@gmail.com";
     setIsLoading(true);
     signInDemoUser({
-      name: customGoogleEmail.split("@")[0],
-      email: customGoogleEmail,
+      name: targetEmail.split("@")[0],
+      email: targetEmail,
     });
     setTimeout(() => {
       router.push("/health-record?onboarding=true");
@@ -365,17 +365,32 @@ export default function SignUpPage() {
                   </button>
                 ) : (
                   <form onSubmit={handleCustomGoogleSubmit} className="pt-3 space-y-2 border-t border-[#2e2e2e]">
+                    <div className="text-[11px] text-gray-400">Enter any Google or institutional email:</div>
                     <input
                       type="email"
-                      required
                       value={customGoogleEmail}
                       onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                      placeholder="skandakn13@gmail.com"
+                      placeholder="e.g. skandakn13@gmail.com"
+                      autoFocus
                       className="w-full bg-[#2a2a2a] border border-[#3e3e3e] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-blue-500"
                     />
-                    <Button type="submit" size="sm" className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 rounded-xl">
-                      Continue as {customGoogleEmail || "Google User"}
-                    </Button>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowCustomInput(false);
+                          setCustomGoogleEmail("");
+                        }}
+                        className="flex-1 border-[#3e3e3e] text-gray-300 hover:bg-[#2a2a2a] text-xs py-1.5 rounded-xl h-8"
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" size="sm" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 rounded-xl h-8">
+                        Continue &rarr;
+                      </Button>
+                    </div>
                   </form>
                 )}
               </div>
