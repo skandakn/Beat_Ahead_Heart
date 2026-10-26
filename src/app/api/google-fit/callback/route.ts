@@ -1,5 +1,6 @@
 import { mapGoogleFitSessions, fetchAndMapSteps, fetchAndMapSleep, fetchAndMapNutrition } from "@/lib/google-fit/mappers";
 import type { GoogleFitNutritionData } from "@/lib/fit-rest/types";
+import { getGoogleClientId, getGoogleClientSecret } from "@/lib/google-fit/credentials";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SESSIONS_URL = "https://www.googleapis.com/fitness/v1/users/me/sessions";
@@ -39,8 +40,8 @@ export async function GET(request: Request) {
   const allowedPages = ["/fitness", "/rest", "/nutri-agent", "/vital-agent"];
   const safePage = allowedPages.includes(returnTo) ? returnTo : "/fitness";
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = getGoogleClientId();
+  const clientSecret = getGoogleClientSecret();
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || new URL(request.url).host;
   const isLocal = host.includes("localhost") || origin.includes("localhost");
   const redirectUri = isLocal
