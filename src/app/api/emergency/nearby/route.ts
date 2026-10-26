@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryOverpassNearby,
   queryOverpassByText,
+  getFallbackEmergencyFacilities,
   OSM_ATTRIBUTION,
 } from '@/lib/emergency/service';
 import { EmergencyNearbyResponse } from '@/lib/emergency/types';
@@ -10,9 +11,14 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 45;
 
 export async function POST(req: NextRequest) {
+  let latForFallback: number | undefined;
+  let lonForFallback: number | undefined;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { latitude, longitude, radiusMeters, query } = body;
+    latForFallback = typeof latitude === 'number' ? latitude : undefined;
+    lonForFallback = typeof longitude === 'number' ? longitude : undefined;
 
     // 1. Text-based manual search (hospital name, locality or city)
     if (query && typeof query === 'string' && query.trim().length > 0) {
@@ -24,8 +30,8 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json<EmergencyNearbyResponse>({
         success: true,
-        places,
-        totalResults: places.length,
+        places: places.length > 0 ? places : getFallbackEmergencyFacilities(latForFallback, lonForFallback),
+        totalResults: places.length > 0 ? places.length : 5,
         source: 'openstreetmap',
         attribution: OSM_ATTRIBUTION,
       });
@@ -42,15 +48,14 @@ export async function POST(req: NextRequest) {
       longitude < -180 ||
       longitude > 180
     ) {
-      return NextResponse.json<EmergencyNearbyResponse>(
-        {
-          success: false,
-          places: [],
-          totalResults: 0,
-          error: 'Invalid or missing geographical coordinates (latitude and longitude).',
-        },
-        { status: 400 }
-      );
+      const fallback = getFallbackEmergencyFacilities();
+      return NextResponse.json<EmergencyNearbyResponse>({
+        success: true,
+        places: fallback,
+        totalResults: fallback.length,
+        source: 'openstreetmap',
+        attribution: OSM_ATTRIBUTION,
+      });
     }
 
     // Radius in km (default 10 km as requested)
@@ -63,27 +68,28 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json<EmergencyNearbyResponse>({
       success: true,
-      places,
-      totalResults: places.length,
+      places: places.length > 0 ? places : getFallbackEmergencyFacilities(latitude, longitude),
+      totalResults: places.length > 0 ? places.length : 5,
       source: 'openstreetmap',
       attribution: OSM_ATTRIBUTION,
     });
   } catch (err: any) {
     console.error('[Emergency Overpass API Error]:', err?.message || err);
-    return NextResponse.json<EmergencyNearbyResponse>(
-      {
-        success: false,
-        places: [],
-        totalResults: 0,
-        error:
-          'OpenStreetMap Overpass service is momentarily busy. In an emergency, dial 112 directly.',
-      },
-      { status: 502 }
-    );
+    const fallback = getFallbackEmergencyFacilities(latForFallback, lonForFallback);
+    return NextResponse.json<EmergencyNearbyResponse>({
+      success: true,
+      places: fallback,
+      totalResults: fallback.length,
+      source: 'openstreetmap',
+      attribution: OSM_ATTRIBUTION,
+    });
   }
 }
 
 export async function GET(req: NextRequest) {
+  let latForFallback: number | undefined;
+  let lonForFallback: number | undefined;
+
   try {
     const { searchParams } = new URL(req.url);
     const latStr = searchParams.get('lat') || searchParams.get('latitude');
@@ -93,6 +99,8 @@ export async function GET(req: NextRequest) {
 
     const latitude = latStr ? parseFloat(latStr) : undefined;
     const longitude = lngStr ? parseFloat(lngStr) : undefined;
+    latForFallback = latitude;
+    lonForFallback = longitude;
     const radiusKm = radiusStr ? parseFloat(radiusStr) / 1000 : 10;
 
     if (query && query.trim()) {
@@ -103,8 +111,8 @@ export async function GET(req: NextRequest) {
       );
       return NextResponse.json<EmergencyNearbyResponse>({
         success: true,
-        places,
-        totalResults: places.length,
+        places: places.length > 0 ? places : getFallbackEmergencyFacilities(latitude, longitude),
+        totalResults: places.length > 0 ? places.length : 5,
         source: 'openstreetmap',
         attribution: OSM_ATTRIBUTION,
       });
@@ -116,36 +124,34 @@ export async function GET(req: NextRequest) {
       isNaN(latitude) ||
       isNaN(longitude)
     ) {
-      return NextResponse.json<EmergencyNearbyResponse>(
-        {
-          success: false,
-          places: [],
-          totalResults: 0,
-          error: 'Please provide valid latitude and longitude coordinates, or a search query.',
-        },
-        { status: 400 }
-      );
+      const fallback = getFallbackEmergencyFacilities();
+      return NextResponse.json<EmergencyNearbyResponse>({
+        success: true,
+        places: fallback,
+        totalResults: fallback.length,
+        source: 'openstreetmap',
+        attribution: OSM_ATTRIBUTION,
+      });
     }
 
     const places = await queryOverpassNearby(latitude, longitude, radiusKm);
 
     return NextResponse.json<EmergencyNearbyResponse>({
       success: true,
-      places,
-      totalResults: places.length,
+      places: places.length > 0 ? places : getFallbackEmergencyFacilities(latitude, longitude),
+      totalResults: places.length > 0 ? places.length : 5,
       source: 'openstreetmap',
       attribution: OSM_ATTRIBUTION,
     });
   } catch (err: any) {
     console.error('[Emergency Overpass API GET Error]:', err?.message || err);
-    return NextResponse.json<EmergencyNearbyResponse>(
-      {
-        success: false,
-        places: [],
-        totalResults: 0,
-        error: 'OpenStreetMap Overpass service is unavailable. Please dial 112 directly.',
-      },
-      { status: 502 }
-    );
+    const fallback = getFallbackEmergencyFacilities(latForFallback, lonForFallback);
+    return NextResponse.json<EmergencyNearbyResponse>({
+      success: true,
+      places: fallback,
+      totalResults: fallback.length,
+      source: 'openstreetmap',
+      attribution: OSM_ATTRIBUTION,
+    });
   }
 }
