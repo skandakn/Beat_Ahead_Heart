@@ -36,10 +36,17 @@ export function LiveEcgMonitor() {
   const [isSerialSupported, setIsSerialSupported] = useState<boolean>(true);
   const [isBrave, setIsBrave] = useState<boolean>(false);
   const [showTroubleshoot, setShowTroubleshoot] = useState<boolean>(false);
+  const [showDebug, setShowDebug] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [portName, setPortName] = useState<string>("Disconnected");
   const [preset, setPreset] = useState<SimulationPreset>("normal");
   const [leadsOff, setLeadsOff] = useState<boolean>(false);
+  // Debug raw data log
+  const [rawLog, setRawLog] = useState<string[]>([]);
+  const rawLogRef = useRef<string[]>([]);
+  const [adcMin, setAdcMin] = useState<number>(9999);
+  const [adcMax, setAdcMax] = useState<number>(0);
+  const [leadsOffCount, setLeadsOffCount] = useState<number>(0);
 
   // Monitor parameters
   const [gain, setGain] = useState<number>(1.0);
@@ -176,12 +183,27 @@ export function LiveEcgMonitor() {
             const trimmed = line.trim();
             if (trimmed === "!") {
               setLeadsOff(true);
+              setLeadsOffCount(c => c + 1);
+              // Log to debug panel
+              rawLogRef.current = [`! (leads-off)`, ...rawLogRef.current].slice(0, 60);
+              setRawLog([...rawLogRef.current]);
             } else if (trimmed) {
               const adc = parseFloat(trimmed);
               if (!isNaN(adc)) {
                 setLeadsOff(false);
                 bufferRef.current.push(adc);
                 samplesSecCountRef.current += 1;
+                // Update debug stats
+                setAdcMin(m => Math.min(m, adc));
+                setAdcMax(m => Math.max(m, adc));
+                // Only log every 10th sample to avoid flooding
+                if (samplesSecCountRef.current % 10 === 0) {
+                  rawLogRef.current = [`ADC: ${adc}`, ...rawLogRef.current].slice(0, 60);
+                  setRawLog([...rawLogRef.current]);
+                }
+              } else {
+                rawLogRef.current = [`??? "${trimmed}"`, ...rawLogRef.current].slice(0, 60);
+                setRawLog([...rawLogRef.current]);
               }
             }
           }
@@ -483,6 +505,19 @@ export function LiveEcgMonitor() {
             USB Help
           </Button>
 
+          {isConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDebug(!showDebug)}
+              className={cn("border-navy-200 text-navy-700 hover:bg-navy-50", showDebug && "border-emerald-400 text-emerald-700 bg-emerald-50")}
+              title="Show raw serial data stream for debugging"
+            >
+              <Terminal className="w-4 h-4 mr-1 text-emerald-600" />
+              Raw Data
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -590,6 +625,65 @@ export function LiveEcgMonitor() {
                 <Usb className="w-3.5 h-3.5 mr-1" />
                 Retry Web Serial Connect
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Raw Serial Debug Panel */}
+      {showDebug && isConnected && (
+        <Card className="border-emerald-200 bg-gray-950 shadow-sm animate-in fade-in duration-200">
+          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-bold text-emerald-400 flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-emerald-400" />
+              Live Serial Debug — Raw Arduino Output
+            </CardTitle>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-gray-400">ADC range: <span className="font-mono text-yellow-300">{adcMin === 9999 ? "—" : adcMin} → {adcMax === 0 ? "—" : adcMax}</span></span>
+              <span className="text-gray-400">Leads-off: <span className={cn("font-mono font-bold", leadsOffCount > 0 ? "text-red-400" : "text-emerald-400")}>{leadsOffCount}</span></span>
+              <span className="text-gray-400">Samples: <span className="font-mono text-cyan-300">{samplesReceived}</span></span>
+              <Button size="sm" variant="ghost" className="h-5 px-2 text-[10px] text-gray-500 hover:text-white"
+                onClick={() => { setRawLog([]); rawLogRef.current = []; setAdcMin(9999); setAdcMax(0); setLeadsOffCount(0); }}>
+                Clear
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            {/* Diagnosis banner */}
+            {rawLog.length > 0 && (
+              <div className={cn(
+                "mb-2 px-3 py-2 rounded text-xs font-semibold",
+                leadsOffCount > samplesReceived * 0.8
+                  ? "bg-red-950 border border-red-600 text-red-300"
+                  : adcMax - adcMin < 5
+                  ? "bg-yellow-950 border border-yellow-600 text-yellow-300"
+                  : adcMax - adcMin < 30
+                  ? "bg-amber-950 border border-amber-500 text-amber-300"
+                  : "bg-emerald-950 border border-emerald-600 text-emerald-300"
+              )}>
+                {leadsOffCount > samplesReceived * 0.8
+                  ? "⚠ Mostly '!' — Leads-Off! Check D10→LO+ and D11→LO- wires. Electrodes may not be on skin."
+                  : adcMax - adcMin < 5
+                  ? "⚠ Signal is FLAT (span < 5 counts). AD8232 OUTPUT pin may not be connected to A0."
+                  : adcMax - adcMin < 30
+                  ? "~ Weak signal (span < 30). Press electrode pads firmly onto skin. Lick fingertips for better contact."
+                  : `✓ Good signal! Span = ${adcMax - adcMin} ADC counts. ECG hardware is working correctly.`}
+              </div>
+            )}
+            {rawLog.length === 0 && (
+              <div className="text-gray-500 text-xs italic px-1">Waiting for data... (If nothing appears after 3 seconds, Arduino may not be sending data)</div>
+            )}
+            {/* Raw log stream */}
+            <div className="font-mono text-xs text-emerald-300 h-32 overflow-y-auto space-y-0.5 scrollbar-thin">
+              {rawLog.map((entry, i) => (
+                <div key={i} className={cn("px-1 rounded text-[11px]",
+                  entry.startsWith("!") ? "text-red-400 bg-red-950/30" :
+                  entry.startsWith("???") ? "text-yellow-400 bg-yellow-950/30" :
+                  "text-emerald-300"
+                )}>
+                  {entry}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
