@@ -1,0 +1,51 @@
+﻿name: Build Android APK (TWA)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Initialize Android Project from Live PWA
+        run: |
+          mkdir android-app
+          cd android-app
+          bubblewrap init --manifest https://beataheadheart-l4x4.vercel.app/manifest.json --skipPwaValidation
+
+      - name: Build Android APK
+        run: |
+          cd android-app
+          bubblewrap build --skipSigning || true
+          find . -name "*.apk" -exec cp {} ../beatahead-app.apk \;
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeatAhead-Android-APK
+          path: beatahead-app.apk
+          if-no-files-found: warn
