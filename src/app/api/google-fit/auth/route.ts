@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getGoogleClientId } from "@/lib/google-fit/credentials";
 
 /**
  * GET /api/google-fit/auth
@@ -6,7 +7,7 @@ import { NextResponse } from "next/server";
  * read-only access to their Google Fit activity data.
  */
 export async function GET(request: Request) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = getGoogleClientId();
 
   if (!clientId) {
     return NextResponse.json(
@@ -18,11 +19,11 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const returnTo = searchParams.get("returnTo") ?? "/fitness";
 
-  // If running locally, use localhost callback so the user stays on localhost;
-  // on production, use configured GOOGLE_REDIRECT_URI or current origin.
-  const redirectUri = origin.includes("localhost")
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || new URL(request.url).host;
+  const isLocal = host.includes("localhost") || origin.includes("localhost");
+  const redirectUri = isLocal
     ? `${origin}/api/google-fit/callback`
-    : (process.env.GOOGLE_REDIRECT_URI || `${origin}/api/google-fit/callback`);
+    : (process.env.GOOGLE_REDIRECT_URI || `https://${host}/api/google-fit/callback`);
 
   // Scopes: read fitness activity sessions + activity segments + sleep + nutrition (no write access)
   const scopes = [

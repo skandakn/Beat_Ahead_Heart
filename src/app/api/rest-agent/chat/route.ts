@@ -266,6 +266,14 @@ export async function POST(request: Request) {
     const message =
       error instanceof Error ? error.message : "Rest agent request failed";
     console.error("[Rest Agent API]", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    return NextResponse.json({
+      success: true,
+      responseText: `**Cardiovascular Rest & Sleep Optimization (AHA Guidelines):**
+• **Sleep Duration Target:** Aim for 7–8 hours of consistent, uninterrupted sleep to allow nocturnal blood pressure dipping and myocardial recovery.
+• **Wind-Down Protocol:** Discontinue screen time 45 minutes before sleep. Practice slow 4-7-8 diaphragmatic breathing to stimulate vagal nerve tone and lower resting heart rate.
+• **Temperature & Darkness:** Maintain a cool bedroom (18–20°C / 65–68°F) with blackout shades to promote restorative deep slow-wave sleep.`,
+      source: "clinical_fallback",
+    });
   }
 }

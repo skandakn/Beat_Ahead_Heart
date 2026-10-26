@@ -6,6 +6,7 @@ import {
   fetchAndMapNutrition,
   fetchAndMapVitals,
 } from "@/lib/google-fit/mappers";
+import { getGoogleClientId, getGoogleClientSecret } from "@/lib/google-fit/credentials";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SESSIONS_URL = "https://www.googleapis.com/fitness/v1/users/me/sessions";
@@ -30,8 +31,8 @@ interface TokenRefreshResponse {
  * returns the mapped WorkoutSession array plus the (possibly refreshed) token.
  */
 export async function POST(request: Request) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = getGoogleClientId();
+  const clientSecret = getGoogleClientSecret();
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(

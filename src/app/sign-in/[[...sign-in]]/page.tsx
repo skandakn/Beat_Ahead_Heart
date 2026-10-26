@@ -117,7 +117,7 @@ export default function SignInPage() {
               </Button>
             </div>
           </div>
-        ) : isClerkConfigured && showClerk ? (
+        ) : isClerkConfigured ? (
           <div className="w-full space-y-4">
             <SignIn
               path="/sign-in"
@@ -147,12 +147,6 @@ export default function SignInPage() {
                 },
               }}
             />
-            <button
-              onClick={() => setShowClerk(false)}
-              className="text-xs text-navy-400 hover:text-white underline w-full text-center py-2"
-            >
-              &larr; Switch back to 1-Click / Google Sign In
-            </button>
           </div>
         ) : (
           <div className="w-full space-y-5 text-left">

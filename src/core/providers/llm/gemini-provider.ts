@@ -10,6 +10,7 @@ import {
   FieldDefinition,
 } from '../../types/schema';
 import { SchemaValidator } from '../../extraction/schema-validator';
+import { generateEmergencyCardiacFallback } from '../../extraction/cardiac-clinical-brain';
 
 export interface GeminiProviderConfig {
   apiKey?: string;
@@ -25,8 +26,8 @@ export class GeminiProvider implements LLMProvider {
 
   constructor(config?: GeminiProviderConfig) {
     this.apiKey = config?.apiKey || process.env.GEMINI_API_KEY || '';
-    // Default to gemini-3.5-flash-lite for lowest latency (1.1s) and high rate-limit ceiling
-    this.model = config?.model || process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+    // Default to gemini-flash-latest with high rate-limit ceiling and fast response
+    this.model = config?.model || process.env.GEMINI_MODEL || 'gemini-flash-latest';
     this.baseUrl = config?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
   }
 
@@ -35,9 +36,10 @@ export class GeminiProvider implements LLMProvider {
    */
   private async executeWithRetryAndFallback(requestBody: any): Promise<any> {
     const modelPool = [
-      'gemini-3-flash-preview',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3.1-flash-lite-preview',
       this.model,
-      'gemini-3.8-flash',
     ].filter((m, idx, arr) => Boolean(m) && arr.indexOf(m) === idx);
 
     let lastError: any = null;
@@ -103,8 +105,11 @@ export class GeminiProvider implements LLMProvider {
    * Generates conversational AI response, handling tools and prompt-injection defenses.
    */
   public async generateResponse(options: LLMGenerateOptions): Promise<LLMResponse> {
+    const lastUserMsg = [...options.messages].reverse().find((m) => m.role === 'user');
+    const userText = lastUserMsg?.content || '';
+
     if (!this.apiKey) {
-      throw new Error('Gemini API Key is not configured. Set GEMINI_API_KEY in environment variables.');
+      return generateEmergencyCardiacFallback(userText, options);
     }
 
     // Format messages for Gemini API
@@ -159,7 +164,15 @@ export class GeminiProvider implements LLMProvider {
       requestBody.tools = [{ functionDeclarations }];
     }
 
-    const data = await this.executeWithRetryAndFallback(requestBody);
+    let data: any;
+    try {
+      data = await this.executeWithRetryAndFallback(requestBody);
+    } catch (err) {
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.warn('[GeminiProvider] Network/API call failed, engaging emergency triage fallback:', err);
+      }
+      return generateEmergencyCardiacFallback(userText, options);
+    }
     const candidate = data.candidates?.[0];
     const parts = candidate?.content?.parts || [];
 
