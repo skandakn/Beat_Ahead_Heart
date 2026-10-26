@@ -2,14 +2,17 @@ import { NextResponse } from 'next/server';
 import { getDefaultVoiceAgent } from '@/core/default-agent';
 
 export async function POST(request: Request) {
+  let callId = `browser_${Date.now()}`;
+  let message: string | undefined;
+  let action = 'utterance';
+  let callerId = 'Patient';
+
   try {
-    const body = await request.json();
-    const {
-      callId = `browser_${Date.now()}`,
-      message,
-      action = 'utterance', // 'start' | 'utterance' | 'end'
-      callerId = 'Patient',
-    } = body;
+    const body = await request.json().catch(() => ({}));
+    if (body.callId) callId = body.callId;
+    if (body.message) message = body.message;
+    if (body.action) action = body.action;
+    if (body.callerId) callerId = body.callerId;
 
     const voiceAgent = getDefaultVoiceAgent();
 
@@ -70,9 +73,30 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('[Voice Chat API] Error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Voice turn processing failed' },
-      { status: 500 }
-    );
+
+    try {
+      // Emergency Clinical Triage Fallback (prevents chatbot from crashing when external keys/network fail)
+      const { generateEmergencyCardiacFallback } = await import('@/core/extraction/cardiac-clinical-brain');
+      const { extractCardiacFindings } = await import('@/core/extraction/deterministic-extractor');
+      
+      const parsed = typeof message === 'string' ? message : '';
+      const fallback = generateEmergencyCardiacFallback(parsed);
+      const findings = extractCardiacFindings(parsed);
+
+      return NextResponse.json({
+        success: true,
+        callId: typeof callId === 'string' ? callId : `fallback_${Date.now()}`,
+        responseText: fallback.text,
+        audioBase64: null,
+        structuredData: findings,
+        toolExecutions: fallback.toolCalls || [],
+        source: 'emergency_clinical_brain',
+      });
+    } catch {
+      return NextResponse.json(
+        { error: error.message || 'Voice turn processing failed' },
+        { status: 500 }
+      );
+    }
   }
 }

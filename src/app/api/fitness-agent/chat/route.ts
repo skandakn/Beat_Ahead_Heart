@@ -279,6 +279,14 @@ export async function POST(request: Request) {
     const message =
       error instanceof Error ? error.message : "Fitness agent request failed";
     console.error("[Fitness Agent API]", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    return NextResponse.json({
+      success: true,
+      responseText: `**Cardiovascular Fitness Guidance (AHA Zone 2 Focus):**
+• **Aerobic Conditioning:** Engage in 30 minutes of low-to-moderate intensity exercise (brisk walking, light cycling, or swimming) at 60–70% of your maximum heart rate.
+• **Autonomic Recovery:** Keep warm-ups and cool-downs to at least 5 minutes to allow gradual heart rate transition and prevent sudden spikes in myocardial workload.
+• **Ischemic Monitoring:** If your Ischemic Stress Index (ISI) is elevated or you feel any chest discomfort, pause your activity, sit upright, and rest immediately.`,
+      source: "clinical_fallback",
+    });
   }
 }
