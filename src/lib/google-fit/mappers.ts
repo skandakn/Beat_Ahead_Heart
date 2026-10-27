@@ -95,14 +95,14 @@ export function mapGoogleFitSessions(sessions: GoogleFitSession[]): WorkoutSessi
     .filter((s) => {
       const start = Number(s.startTimeMillis);
       const end = Number(s.endTimeMillis);
-      // Must have valid timestamps and at least 1 minute duration
-      return !isNaN(start) && !isNaN(end) && end - start >= 1 * 60 * 1000;
+      // Must have valid timestamps and at least 30 seconds duration
+      return !isNaN(start) && !isNaN(end) && end - start >= 30 * 1000;
     })
     .map((s) => {
       const startMs = Number(s.startTimeMillis);
       const endMs = Number(s.endTimeMillis);
       const durationMs = endMs - startMs;
-      const durationMinutes = Math.round(durationMs / 1000 / 60);
+      const durationMinutes = Math.max(1, Math.round(durationMs / 1000 / 60));
       const type = resolveExerciseType(s.activityType);
       const intensity = durationToIntensity(durationMs, s.activityType);
       const dateStr = new Date(startMs).toISOString().split("T")[0]; // YYYY-MM-DD
@@ -139,7 +139,7 @@ interface AggregateBucket {
   dataset?: {
     dataSourceId: string;
     point?: {
-      value?: { intVal?: number }[];
+      value?: { intVal?: number; fpVal?: number }[];
     }[];
   }[];
 }
@@ -148,8 +148,8 @@ interface AggregateResponse {
   bucket?: AggregateBucket[];
 }
 
-// Minimum steps to count as a meaningful walking session (roughly 10 minutes walking)
-const MIN_STEPS_THRESHOLD = 1000;
+// Minimum steps to count as a meaningful walking session
+const MIN_STEPS_THRESHOLD = 50;
 
 // Average walking speed: ~100 steps/minute
 function stepsToDurationMinutes(steps: number): number {
@@ -182,13 +182,19 @@ export async function fetchAndMapSteps(
       };
       const sources = dsData.dataSource ?? [];
 
-      // Prefer raw delta source, fall back to cumulative (OPPO / some Android phones)
-      const deltaSource = sources.find(s =>
-        s.dataType?.name === "com.google.step_count.delta" && s.dataStreamId.startsWith("raw:")
+      // Prefer estimated or merged delta source from Google Play Services / Google Fit app
+      const estimatedDelta = sources.find(s =>
+        s.dataType?.name === "com.google.step_count.delta" &&
+        (s.dataStreamId.includes("estimated_steps") || s.dataStreamId.includes("merge"))
+      );
+      const anyDeltaSource = sources.find(s =>
+        s.dataType?.name === "com.google.step_count.delta"
       );
       const cumulativeSource = sources.find(s =>
         s.dataType?.name === "com.google.step_count.cumulative"
       );
+
+      const deltaSource = estimatedDelta ?? anyDeltaSource;
 
       if (deltaSource) {
         stepSourceId = deltaSource.dataStreamId;
@@ -263,7 +269,10 @@ export async function fetchAndMapSteps(
   // Step 2b: use aggregate API for delta sources (or generic fallback)
   const aggregateBy = stepSourceId
     ? [{ dataTypeName: stepDataType, dataSourceId: stepSourceId }]
-    : [{ dataTypeName: "com.google.step_count.delta" }];
+    : [
+        { dataTypeName: "com.google.step_count.delta", dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps" },
+        { dataTypeName: "com.google.step_count.delta" }
+      ];
 
   const stepStart = Math.max(startMs, endMs - 60 * 86400000);
 
@@ -278,12 +287,12 @@ export async function fetchAndMapSteps(
         startTimeMillis: String(stepStart),
         endTimeMillis: String(endMs),
       }),
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(6000),
     }
   );
 
   // If specific source failed, retry without specifying a source
-  if (!aggRes.ok && stepSourceId) {
+  if (!aggRes.ok) {
     aggRes = await fetch(
       "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate",
       {
@@ -295,7 +304,7 @@ export async function fetchAndMapSteps(
           startTimeMillis: String(stepStart),
           endTimeMillis: String(endMs),
         }),
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(6000),
       }
     );
   }
@@ -313,7 +322,8 @@ export async function fetchAndMapSteps(
     for (const ds of bucket.dataset ?? []) {
       for (const point of ds.point ?? []) {
         for (const val of point.value ?? []) {
-          totalSteps += val.intVal ?? 0;
+          const count = typeof val.intVal === "number" ? val.intVal : (typeof val.fpVal === "number" ? Math.round(val.fpVal) : 0);
+          totalSteps += count;
         }
       }
     }
