@@ -6,7 +6,6 @@ import { ISITrendChart } from "@/components/charts/ISITrendChart";
 import { ISIGauge } from "@/components/isi/ISIGauge";
 import { BaselineCard } from "@/components/isi/BaselineCard";
 import { RiskTrendBanner } from "@/components/isi/RiskTrendBanner";
-import { ContributionBars } from "@/components/isi/ContributionBars";
 import { useSimulation } from "@/lib/simulation/SimulationContext";
 import { useTour } from "@/lib/tour/TourContext";
 import Link from "next/link";
@@ -79,10 +78,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <BaselineCard />
-        <ContributionBars />
-      </div>
+      <BaselineCard />
 
       {/* ── Footer Section ──────────────────────────────────────────── */}
       <footer className="mt-12 pt-8 border-t border-navy-100">
