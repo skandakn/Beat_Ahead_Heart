@@ -125,7 +125,7 @@ export async function POST(request: Request) {
       `${SESSIONS_URL}?startTime=${sessionsStart}&endTime=${new Date(now).toISOString()}`,
       {
         headers: { Authorization: `Bearer ${access_token}` },
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(8000),
       }
     ).then(async (res) => {
       if (res.status === 401) {
