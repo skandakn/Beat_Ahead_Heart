@@ -58,6 +58,8 @@ export function LiveEcgMonitor() {
     soundEnabled,
     setSoundEnabled,
     playBeep,
+    isIschemiaDemoActive,
+    toggleIschemiaDemo,
   } = useHardwareSerial();
 
   // Local UI / Display Controls
@@ -229,7 +231,9 @@ export function LiveEcgMonitor() {
           const centered = rawAdc - baselineRef.current;
           const invertedMultiplier = isInverted ? -1 : 1;
           const scaled = (centered * (height / 280)) * gain * invertedMultiplier;
-          const currentY = Math.max(4, Math.min(height - 4, midY - scaled));
+          // When Ischemia Demo or preset is active, visually displace waveform downwards to display ST depression
+          const stOffset = (isIschemiaDemoActive || preset === "ischemic") ? (-1.60 * 18.0 * (height / 280) * gain) : 0;
+          const currentY = Math.max(4, Math.min(height - 4, midY - scaled - stOffset));
 
           // Erase head (clears 24px ahead of sweep bar)
           const eraseWidth = 24;
@@ -245,8 +249,9 @@ export function LiveEcgMonitor() {
           }
           ctx.stroke();
 
-          // Draw sweeping phosphor glow bar
-          ctx.fillStyle = "rgba(74, 222, 128, 0.4)";
+          // Draw sweeping phosphor glow bar (Emergency red when ischemic)
+          const isAlert = isIschemiaDemoActive || stDeviationMm <= -1.0 || preset === "ischemic";
+          ctx.fillStyle = isAlert ? "rgba(239, 68, 68, 0.55)" : "rgba(74, 222, 128, 0.4)";
           ctx.fillRect(currentX + eraseWidth - 2, 0, 2, height);
 
           // Draw ECG Trace
@@ -258,11 +263,10 @@ export function LiveEcgMonitor() {
             ctx.lineTo(currentX + 1, midY);
             ctx.stroke();
           } else {
-            const isAlert = stDeviationMm <= -1.0;
             ctx.strokeStyle = isAlert ? "#EF4444" : "#22C55E";
             ctx.shadowColor = isAlert ? "#EF4444" : "#4ADE80";
-            ctx.shadowBlur = 6;
-            ctx.lineWidth = 2.2;
+            ctx.shadowBlur = isAlert ? 8 : 6;
+            ctx.lineWidth = 2.4;
             ctx.lineJoin = "round";
 
             ctx.beginPath();
@@ -297,6 +301,7 @@ export function LiveEcgMonitor() {
     isInverted,
     leadsOff,
     stDeviationMm,
+    isIschemiaDemoActive,
     drainSamples,
   ]);
 
@@ -382,6 +387,27 @@ export function LiveEcgMonitor() {
             </Button>
           )}
 
+          {/* Live Ischemia Trigger for Judging Demo */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleIschemiaDemo}
+            className={cn(
+              "font-bold transition-all shadow-xs border",
+              isIschemiaDemoActive
+                ? "bg-red-600 text-white border-red-700 hover:bg-red-700 animate-pulse ring-2 ring-red-400"
+                : "bg-amber-500/10 text-amber-700 border-amber-300 hover:bg-amber-500/20"
+            )}
+            title={
+              isIschemiaDemoActive
+                ? "Click to deactivate Ischemia Demo and return to normal"
+                : "Click to simulate Acute Ischemia (ST depression -1.6mm, High ISI) for Judges"
+            }
+          >
+            <AlertTriangle className={cn("w-4 h-4 mr-1.5", isIschemiaDemoActive ? "text-white" : "text-amber-600")} />
+            {isIschemiaDemoActive ? "🚨 Ischemia Active (Reset)" : "⚡ Demo Ischemia to Judges"}
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -411,6 +437,37 @@ export function LiveEcgMonitor() {
           </Button>
         </div>
       </div>
+
+      {/* Emergency Ischemia Active Alert Banner (When Demo or Ischemic Preset Active) */}
+      {isIschemiaDemoActive && (
+        <div className="p-4 bg-red-600/15 border-2 border-red-500 rounded-xl flex items-center justify-between flex-wrap gap-4 animate-pulse text-red-950 shadow-md">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-red-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+              🚨
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black tracking-wider uppercase text-red-700 bg-red-100 px-2.5 py-0.5 rounded border border-red-300">
+                  Live Judge Demonstration Active
+                </span>
+                <span className="text-xs font-bold text-red-700">
+                  Subendocardial ST Depression (-1.60 mm) &bull; Critical ISI ({isiScore}/100)
+                </span>
+              </div>
+              <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                Acute myocardial ischemia protocol triggered on live Lead II waveform. Continuous chronotropic tachycardia ({heartRate} BPM) and J-point depression &le; -1.0 mm detected.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={toggleIschemiaDemo}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold shrink-0 shadow-sm"
+          >
+            Reset to Baseline
+          </Button>
+        </div>
+      )}
 
       {/* Brave Browser Shield Warning */}
       {isBrave && (
@@ -601,25 +658,34 @@ export function LiveEcgMonitor() {
       {/* 4 Primary Telemetry Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Heart Rate */}
-        <Card className="border-navy-100 shadow-xs">
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", isIschemiaDemoActive && "border-red-300 bg-red-50/20")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
-              <span className="font-semibold text-navy-600">Heart Rate</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-navy-600">Heart Rate</span>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
               <Heart
                 className={cn(
                   "w-4 h-4 text-cardiac",
-                  heartRate > 90 ? "animate-ping" : "animate-pulse"
+                  heartRate > 90 || isIschemiaDemoActive ? "animate-ping" : "animate-pulse"
                 )}
                 fill="currentColor"
               />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-navy-900">{heartRate}</span>
+              <span className="text-3xl font-extrabold text-navy-900 font-mono tracking-tight">{heartRate}</span>
               <span className="text-xs text-navy-400 font-medium">BPM</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                LIVE
+              </span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
               R-R Interval:{" "}
-              <span className="font-semibold text-navy-700">
+              <span className="font-semibold text-navy-700 font-mono">
                 {Math.round(60000 / Math.max(1, heartRate))} ms
               </span>
             </p>
@@ -627,22 +693,22 @@ export function LiveEcgMonitor() {
         </Card>
 
         {/* ST-Segment Deviation */}
-        <Card className="border-navy-100 shadow-xs">
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", (isIschemiaDemoActive || stDeviationMm <= -1.0) && "border-red-300 bg-red-50/30")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <span className="font-semibold text-navy-600">ST Deviation</span>
               <Activity
                 className={cn(
                   "w-4 h-4",
-                  stDeviationMm <= -1.0 ? "text-red-600 animate-pulse" : "text-emerald-500"
+                  (isIschemiaDemoActive || stDeviationMm <= -1.0) ? "text-red-600 animate-pulse" : "text-emerald-500"
                 )}
               />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span
                 className={cn(
-                  "text-3xl font-extrabold",
-                  stDeviationMm <= -1.0
+                  "text-3xl font-extrabold font-mono tracking-tight",
+                  (isIschemiaDemoActive || stDeviationMm <= -1.0)
                     ? "text-red-600"
                     : stDeviationMm <= -0.5
                     ? "text-amber-500"
@@ -656,7 +722,7 @@ export function LiveEcgMonitor() {
               <span className="text-xs text-navy-400 font-medium">mm (mV/10)</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              {stDeviationMm <= -1.0 ? (
+              {(isIschemiaDemoActive || stDeviationMm <= -1.0) ? (
                 <span className="text-red-600 font-bold">🚨 Ischemic ST Depression</span>
               ) : stDeviationMm <= -0.5 ? (
                 <span className="text-amber-600 font-medium">⚠️ Mild ST Sagging</span>
@@ -668,14 +734,20 @@ export function LiveEcgMonitor() {
         </Card>
 
         {/* Real-time ISI Stress Score */}
-        <Card className="border-navy-100 shadow-xs">
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", (isIschemiaDemoActive || isiScore >= 70) && "border-red-400 bg-red-50/40 ring-1 ring-red-400")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
-              <span className="font-semibold text-navy-600">Ischemic Stress Index</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-navy-600">Ischemic Stress Index</span>
+                <span className="relative flex h-2 w-2">
+                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", (isiScore >= 70 || isIschemiaDemoActive) ? "bg-red-400" : "bg-emerald-400")}></span>
+                  <span className={cn("relative inline-flex rounded-full h-2 w-2", (isiScore >= 70 || isIschemiaDemoActive) ? "bg-red-500" : "bg-emerald-500")}></span>
+                </span>
+              </div>
               <ShieldAlert
                 className={cn(
                   "w-4 h-4",
-                  isiScore >= 70
+                  (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600 animate-bounce"
                     : isiScore >= 40
                     ? "text-amber-500"
@@ -686,8 +758,8 @@ export function LiveEcgMonitor() {
             <div className="mt-2 flex items-baseline gap-2">
               <span
                 className={cn(
-                  "text-3xl font-extrabold",
-                  isiScore >= 70
+                  "text-3xl font-extrabold font-mono tracking-tight",
+                  (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600"
                     : isiScore >= 40
                     ? "text-amber-500"
@@ -697,20 +769,30 @@ export function LiveEcgMonitor() {
                 {isiScore}
               </span>
               <span className="text-xs text-navy-400 font-medium">/ 100</span>
+              <span className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border",
+                (isIschemiaDemoActive || isiScore >= 70)
+                  ? "bg-red-100 text-red-800 border-red-300"
+                  : isiScore >= 40
+                  ? "bg-amber-100 text-amber-800 border-amber-300"
+                  : "bg-emerald-100 text-emerald-800 border-emerald-300"
+              )}>
+                {(isIschemiaDemoActive || isiScore >= 70) ? "CRITICAL" : isiScore >= 40 ? "ELEVATED" : "NORMAL"}
+              </span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              Status:{" "}
+              Dynamic Stress:{" "}
               <span
                 className={cn(
                   "font-bold",
-                  isiScore >= 70
+                  (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600"
                     : isiScore >= 40
                     ? "text-amber-600"
                     : "text-emerald-600"
                 )}
               >
-                {isiScore >= 70 ? "Critical Ischemia" : isiScore >= 40 ? "Elevated" : "Normal"}
+                {(isIschemiaDemoActive || isiScore >= 70) ? "Critical Ischemia" : isiScore >= 40 ? "Elevated Strain" : "Normal Sinus"}
               </span>
             </p>
           </CardContent>
@@ -819,14 +901,18 @@ export function LiveEcgMonitor() {
           />
 
           {/* Real-time Oscilloscope HUD Overlay */}
-          <div className="absolute top-3 left-3 pointer-events-none bg-black/60 backdrop-blur-xs p-2 rounded border border-gray-800/80 text-[11px] font-mono text-emerald-400 space-y-0.5">
-            <div>CH1: AD8232 (Lead II)</div>
+          <div className="absolute top-3 left-3 pointer-events-none bg-black/75 backdrop-blur-xs p-2.5 rounded-lg border border-gray-800 text-[11px] font-mono text-emerald-400 space-y-0.5">
+            <div className="flex items-center gap-1.5 font-bold">
+              <span className={cn("w-2 h-2 rounded-full", (isIschemiaDemoActive || stDeviationMm <= -1.0) ? "bg-red-500 animate-ping" : "bg-emerald-400 animate-pulse")} />
+              <span>CH1: AD8232 (Lead II Telemetry)</span>
+            </div>
             <div>
               ST-Level:{" "}
               <span
                 className={cn(
-                  stDeviationMm <= -1.0
-                    ? "text-red-400 font-bold"
+                  "font-bold",
+                  (isIschemiaDemoActive || stDeviationMm <= -1.0)
+                    ? "text-red-400"
                     : stDeviationMm <= -0.5
                     ? "text-amber-400"
                     : "text-emerald-400"
@@ -838,8 +924,9 @@ export function LiveEcgMonitor() {
                 mm
               </span>
             </div>
-            <div>R-R Mean: {Math.round(60000 / Math.max(1, heartRate))} ms</div>
-            <div>Status: {isConnected ? "Physical Arduino Serial" : "Preset Mode"}</div>
+            <div>R-R Mean: {Math.round(60000 / Math.max(1, heartRate))} ms &bull; HR: {heartRate} BPM</div>
+            <div>ISI Stress: <span className={cn("font-bold", (isIschemiaDemoActive || isiScore >= 70) ? "text-red-400" : "text-emerald-400")}>{isiScore}/100</span></div>
+            <div>Status: <span className={cn("font-bold", isIschemiaDemoActive ? "text-red-400" : "text-emerald-400")}>{isIschemiaDemoActive ? "🚨 JUDGE DEMO: ISCHEMIA" : isConnected ? "Physical Arduino Serial" : "Preset Mode"}</span></div>
           </div>
         </div>
       </Card>

@@ -10,20 +10,20 @@ import { useHardwareSerial } from "@/lib/hardware/HardwareSerialContext";
 export function DashboardStats() {
   const { currentScore, baseline } = useSimulation();
   const { t } = useI18n();
-  const { isConnected, isiScore } = useHardwareSerial();
+  const { isConnected, isiScore, isIschemiaDemoActive } = useHardwareSerial();
 
   const stats = [
     {
       label: t("stats.currentISI"),
-      value: isConnected ? isiScore : (currentScore?.score ?? "--"),
+      value: (isConnected || isIschemiaDemoActive) ? isiScore : (currentScore?.score ?? "--"),
       suffix: "/ 100",
       icon: Activity,
       accent: true,
     },
     {
       label: t("stats.trend"),
-      value: currentScore ? getTrendLabel(currentScore.trend, t) : "--",
-      prefix: currentScore?.trend === "increasing" ? "↑" : currentScore?.trend === "decreasing" ? "↓" : "→",
+      value: isIschemiaDemoActive ? "Acute Elevation" : currentScore ? getTrendLabel(currentScore.trend, t) : "--",
+      prefix: isIschemiaDemoActive ? "↑↑" : currentScore?.trend === "increasing" ? "↑" : currentScore?.trend === "decreasing" ? "↓" : "→",
       icon: TrendingUp,
     },
     {

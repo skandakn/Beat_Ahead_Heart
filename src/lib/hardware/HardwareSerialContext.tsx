@@ -36,6 +36,10 @@ export interface HardwareSerialContextType {
   samplesReceived: number;
   processingStatus: string;
 
+  // Live Ischemia Demonstration Mode for Judges
+  isIschemiaDemoActive: boolean;
+  toggleIschemiaDemo: () => void;
+
   // Debug stats
   rawLog: string[];
   clearRawLog: () => void;
@@ -58,19 +62,19 @@ export interface HardwareSerialContextType {
 // Multimodal Ischemic Stress Index (ISI) Continuous Computation Function
 export function computeDynamicIsi(bpm: number, stMm: number, hrvOffset: number = 0): number {
   if (stMm <= -1.0) {
-    // Acute Ischemia (72 - 96 range)
-    const base = 74;
-    const stComponent = Math.abs(stMm) * 12;
+    // Acute Ischemia (74 - 96 range)
+    const base = 75;
+    const stComponent = Math.abs(stMm) * 12.0;
     const hrComponent = Math.max(0, bpm - 70) * 0.35;
-    return Math.max(72, Math.min(96, Math.round(base + stComponent + hrComponent + hrvOffset)));
+    return Math.max(74, Math.min(96, Math.round(base + stComponent + hrComponent + hrvOffset)));
   } else if (stMm <= -0.5) {
-    // Elevated Strain / Subendocardial Sagging (45 - 68 range)
+    // Elevated Strain / Subendocardial Sagging (46 - 68 range)
     const base = 48;
-    const stComponent = Math.abs(stMm) * 15;
-    const hrComponent = Math.max(0, bpm - 70) * 0.4;
-    return Math.max(45, Math.min(68, Math.round(base + stComponent + hrComponent + hrvOffset)));
+    const stComponent = Math.abs(stMm) * 15.0;
+    const hrComponent = Math.max(0, bpm - 70) * 0.40;
+    return Math.max(46, Math.min(68, Math.round(base + stComponent + hrComponent + hrvOffset)));
   } else {
-    // Physiological Normal Range (11 - 38 range, scales continuously with cardiac workload)
+    // Physiological Normal Range (11 - 38 range, continuously responds to HR changes)
     const base = 12;
     const hrDemand = Math.max(0, bpm - 58) * 0.42;
     const stDemand = Math.abs(stMm) * 14.0;
@@ -98,6 +102,10 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const [processingStatus, setProcessingStatus] = useState<string>("Ready");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
 
+  // Live Ischemia Demonstration for Judges
+  const [isIschemiaDemoActive, setIsIschemiaDemoActive] = useState<boolean>(false);
+  const isIschemiaDemoActiveRef = useRef<boolean>(false);
+
   // Refs for instantaneous access inside high-frequency loops
   const stDeviationMmRef = useRef<number>(0.05);
   const currentHeartRateRef = useRef<number>(72);
@@ -120,14 +128,16 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const samplesSecCountRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Fast R-Peak & Dynamic Heart Rate Detection State
-  const baselineRef = useRef<number>(512);
-  const maxAdcTrackerRef = useRef<number>(600);
+  // Self-Calibrating QRS Detector State (Slope + Amplitude)
+  const baselineRef = useRef<number>(200);
+  const maxAdcTrackerRef = useRef<number>(45); // initialized to 45 above baseline
+  const prevAdcRef = useRef<number>(200);
+  const slopeEnergyRef = useRef<number>(0);
   const lastRPeakTimeRef = useRef<number>(Date.now());
   const recentRrIntervalsRef = useRef<number[]>([]);
   const isOverPeakThresholdRef = useRef<boolean>(false);
 
-  // Keep refs synchronized with state
+  // Synchronize refs with state
   useEffect(() => {
     stDeviationMmRef.current = stDeviationMm;
   }, [stDeviationMm]);
@@ -135,6 +145,28 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     currentHeartRateRef.current = heartRate;
   }, [heartRate]);
+
+  // Toggle Ischemia Demo Mode for Judges
+  const toggleIschemiaDemo = useCallback(() => {
+    setIsIschemiaDemoActive((prev) => {
+      const next = !prev;
+      isIschemiaDemoActiveRef.current = next;
+      if (next) {
+        setStDeviationMm(-1.60);
+        stDeviationMmRef.current = -1.60;
+        const liveIsi = computeDynamicIsi(currentHeartRateRef.current, -1.60);
+        setIsiScore(liveIsi);
+        setProcessingStatus("🚨 ISCHEMIC STRESS TEST ACTIVE: Subendocardial ST Depression (-1.60 mm) | HIGH RISK");
+      } else {
+        setStDeviationMm(0.05);
+        stDeviationMmRef.current = 0.05;
+        const liveIsi = computeDynamicIsi(currentHeartRateRef.current, 0.05);
+        setIsiScore(liveIsi);
+        setProcessingStatus("Live Telemetry: Isoelectric Normal (+0.05 mm)");
+      }
+      return next;
+    });
+  }, []);
 
   // Check browser support and detect Brave
   useEffect(() => {
@@ -175,60 +207,66 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [soundEnabled]);
 
-  // Real-time QRS R-Peak detector running directly on every incoming ADC sample
+  // Self-Calibrating Real-Time QRS R-Peak Detector running on every incoming ADC sample
   const processSampleForQrs = useCallback(
     (adc: number) => {
-      // 1. Slow exponential moving average for baseline tracking
-      baselineRef.current = baselineRef.current * 0.997 + adc * 0.003;
+      const diff = Math.abs(adc - prevAdcRef.current);
+      prevAdcRef.current = adc;
+
+      // 1. Adaptive DC baseline tracking
+      baselineRef.current = baselineRef.current * 0.995 + adc * 0.005;
       const centered = adc - baselineRef.current;
 
-      // 2. Track dynamic peak envelope
-      if (adc > maxAdcTrackerRef.current) {
-        maxAdcTrackerRef.current = adc;
+      // 2. Track peak envelope adaptively
+      if (centered > maxAdcTrackerRef.current) {
+        maxAdcTrackerRef.current = centered;
       } else {
-        maxAdcTrackerRef.current = maxAdcTrackerRef.current * 0.999 + baselineRef.current * 0.001;
+        maxAdcTrackerRef.current = Math.max(20, maxAdcTrackerRef.current * 0.998);
       }
 
-      // 3. Peak detection threshold (~38% of dynamic span above baseline, min 22 counts)
-      const dynamicSpan = Math.max(22, maxAdcTrackerRef.current - baselineRef.current);
-      const peakThreshold = dynamicSpan * 0.38;
+      // 3. Slope energy integration (QRS derivative)
+      slopeEnergyRef.current = slopeEnergyRef.current * 0.80 + diff * 0.20;
+
+      const dynamicSpan = Math.max(16, maxAdcTrackerRef.current);
+      const peakThreshold = dynamicSpan * 0.35;
 
       const now = Date.now();
       const timeSinceLastPeak = now - lastRPeakTimeRef.current;
 
-      // If signal crosses above peak threshold
-      if (centered > peakThreshold && !isOverPeakThresholdRef.current && timeSinceLastPeak > 310) {
+      // Trigger if steep slope + amplitude elevation (classic Pan-Tompkins criteria)
+      const isQrsPeak = (centered > peakThreshold && slopeEnergyRef.current > 3.8) || (centered > dynamicSpan * 0.75);
+
+      if (isQrsPeak && !isOverPeakThresholdRef.current && timeSinceLastPeak > 300) {
         isOverPeakThresholdRef.current = true;
         const rrMs = timeSinceLastPeak;
         lastRPeakTimeRef.current = now;
 
-        if (rrMs >= 330 && rrMs <= 1800) {
-          // Instantaneous BPM for this beat
+        if (rrMs >= 320 && rrMs <= 1800) {
           const instantBpm = Math.round(60000 / rrMs);
 
-          // Fast 2-beat buffer for instant physiological responsiveness
+          // Fast 2-beat responsive buffer: updates IMMEDIATELY with every pulse
           recentRrIntervalsRef.current.push(instantBpm);
           if (recentRrIntervalsRef.current.length > 2) {
             recentRrIntervalsRef.current.shift();
           }
 
           const sum = recentRrIntervalsRef.current.reduce((a, b) => a + b, 0);
-          const smoothedBpm = Math.round(sum / recentRrIntervalsRef.current.length);
+          const dynamicBpm = Math.round(sum / recentRrIntervalsRef.current.length);
 
-          if (smoothedBpm >= 40 && smoothedBpm <= 190) {
-            setHeartRate(smoothedBpm);
-            currentHeartRateRef.current = smoothedBpm;
+          if (dynamicBpm >= 42 && dynamicBpm <= 190) {
+            setHeartRate(dynamicBpm);
+            currentHeartRateRef.current = dynamicBpm;
 
-            // Recalculate dynamic ISI score immediately on EVERY heartbeat!
-            const newIsi = computeDynamicIsi(smoothedBpm, stDeviationMmRef.current);
-            setIsiScore(newIsi);
+            // Recalculate live ISI score immediately on EVERY heartbeat!
+            const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
+            const liveIsi = computeDynamicIsi(dynamicBpm, effectiveSt);
+            setIsiScore(liveIsi);
           }
 
-          // Trigger audio beep if enabled
+          // Audio QRS beep
           playBeep();
         }
-      } else if (centered < peakThreshold * 0.45) {
-        // Arm the detector for the next beat
+      } else if (centered < peakThreshold * 0.4) {
         isOverPeakThresholdRef.current = false;
       }
     },
@@ -329,9 +367,9 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
       setPreset("arduino");
       setPortName("Arduino Uno (USB)");
 
-      // Reset baselines for clean auto-centering
-      baselineRef.current = 512;
-      maxAdcTrackerRef.current = 600;
+      // Reset baselines for immediate quick adaptation
+      baselineRef.current = 200;
+      maxAdcTrackerRef.current = 45;
       lastRPeakTimeRef.current = Date.now();
       recentRrIntervalsRef.current = [];
 
@@ -390,8 +428,8 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
 
     const interval = setInterval(async () => {
       const windowSamples = [...analysisBufferRef.current];
-      if (windowSamples.length < 400) {
-        setProcessingStatus(`Buffering window (${windowSamples.length}/400)...`);
+      if (windowSamples.length < 350) {
+        setProcessingStatus(`Buffering window (${windowSamples.length}/350)...`);
         return;
       }
 
@@ -409,19 +447,23 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
 
         if (data.status === "success") {
-          const nextSt = data.st_deviation_mm ?? 0;
+          const nextSt = isIschemiaDemoActiveRef.current ? -1.60 : (data.st_deviation_mm ?? 0);
           setStDeviationMm(nextSt);
           stDeviationMmRef.current = nextSt;
 
-          const nextIsi = data.isi_score ?? computeDynamicIsi(currentHeartRateRef.current, nextSt);
+          const nextIsi = computeDynamicIsi(currentHeartRateRef.current, nextSt);
           setIsiScore(nextIsi);
           setSqi(data.signal_quality_percent ?? 95);
 
           const peaks = data.r_peaks?.length ?? 0;
           const stStr = nextSt >= 0 ? `+${nextSt.toFixed(2)}` : nextSt.toFixed(2);
-          setProcessingStatus(
-            `Live Telemetry: ${peaks} Beats Analyzed | ST: ${stStr} mm | ${data.risk_tier}`
-          );
+          if (isIschemiaDemoActiveRef.current) {
+            setProcessingStatus("🚨 ISCHEMIA DEMO TEST ACTIVE: ST -1.60 mm | Critical Risk Alert");
+          } else {
+            setProcessingStatus(
+              `Live Telemetry: ${peaks} Beats Analyzed | ST: ${stStr} mm | ${data.risk_tier}`
+            );
+          }
         }
       } catch {}
     }, 2500);
@@ -444,7 +486,8 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
           setHeartRate((prevHr) => {
             const nextBpm = Math.max(48, Math.min(175, Math.round(prevHr + (Math.sin(timeSec * 0.4) > 0.6 ? 1 : Math.sin(timeSec * 0.4) < -0.6 ? -1 : 0))));
             currentHeartRateRef.current = nextBpm;
-            const dynamicIsi = computeDynamicIsi(nextBpm, stDeviationMmRef.current, vagalCycle);
+            const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
+            const dynamicIsi = computeDynamicIsi(nextBpm, effectiveSt, vagalCycle);
             setIsiScore(dynamicIsi);
             return nextBpm;
           });
@@ -515,6 +558,8 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
         sampleRate,
         samplesReceived,
         processingStatus,
+        isIschemiaDemoActive,
+        toggleIschemiaDemo,
         rawLog,
         clearRawLog,
         adcMin,
