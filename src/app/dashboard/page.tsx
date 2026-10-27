@@ -56,7 +56,7 @@ export default function DashboardPage() {
             href="/monitor"
             className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
           >
-            <span>Open Live ECG Monitor</span>
+            <span>Open ECG Monitor</span>
             <span>&rarr;</span>
           </Link>
         </div>

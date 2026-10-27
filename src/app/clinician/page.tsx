@@ -197,7 +197,7 @@ export default function ClinicianPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cardiac hover:bg-red-700 text-white text-xs font-semibold shadow-xs transition-colors"
                   >
                     <Activity className="w-3.5 h-3.5" />
-                    Open Live ECG Monitor
+                    Open ECG Monitor
                   </Link>
                   <Link
                     href="/health-record"

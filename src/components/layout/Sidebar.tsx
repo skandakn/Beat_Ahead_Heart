@@ -48,7 +48,7 @@ function useIsOnboarding(pathname: string): boolean {
 function getNavItems(t: (key: TranslationKey) => string) {
   return [
     { href: "/dashboard", label: t("nav.overview"), icon: LayoutDashboard },
-    { href: "/monitor", label: "Live ECG Monitor", icon: Activity, isLive: true },
+    { href: "/monitor", label: "ECG Monitor", icon: Activity },
     { href: "/health-record", label: t("nav.healthRecord"), icon: HeartPulse },
     { href: "/trends", label: t("nav.trends"), icon: BarChart3 },
     { href: "/nutri-agent", label: t("nav.nutriAgent"), icon: Salad },
@@ -112,11 +112,6 @@ export function Sidebar() {
                 <Icon className="w-4 h-4" />
                 {item.label}
               </div>
-              {(item as any).isLive && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cardiac text-white tracking-wide uppercase animate-pulse">
-                  Live
-                </span>
-              )}
             </Link>
           );
           
@@ -266,11 +261,6 @@ export function MobileNav() {
                       <Icon className="w-4 h-4" />
                       {item.label}
                     </div>
-                    {(item as any).isLive && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cardiac text-white tracking-wide uppercase animate-pulse">
-                        Live
-                      </span>
-                    )}
                   </Link>
                 );
               })}
