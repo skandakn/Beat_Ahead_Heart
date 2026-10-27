@@ -13,7 +13,9 @@ import {
   RefreshCw,
   MessageSquare,
   Sparkles,
+  Mic,
 } from "lucide-react";
+import { useVoiceInput } from "@/lib/voice/useVoiceInput";
 
 interface VitalChatMessage {
   id: string;
@@ -63,6 +65,18 @@ How can I help you interpret your physiological biomarkers today?`,
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const {
+    isListening,
+    isTranscribing,
+    errorMessage: micError,
+    toggleListening,
+  } = useVoiceInput({
+    onTranscript: (spokenText) => {
+      setInput((prev) => (prev ? `${prev} ${spokenText}` : spokenText));
+    },
+  });
+
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -227,25 +241,61 @@ How can I help you interpret your physiological biomarkers today?`,
             e.preventDefault();
             sendMessage(input);
           }}
-          className="flex items-center gap-2 pt-2 border-t border-navy-100"
+          className="flex flex-col gap-1.5 pt-2 border-t border-navy-100"
         >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your heart rate, BP, SpO2, or ISI..."
-            disabled={loading}
-            className="flex-1 rounded-lg border border-navy-200 bg-white px-3 py-2 text-xs sm:text-sm text-navy-900 placeholder:text-navy-400 focus:outline-none focus:border-navy-500"
-          />
-          <Button
-            type="submit"
-            disabled={!input.trim() || loading}
-            size="sm"
-            className="bg-navy-900 hover:bg-navy-800 text-white h-9 px-4 gap-1 text-xs"
-          >
-            <Send className="w-3.5 h-3.5" />
-            Send
-          </Button>
+          {micError && (
+            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">
+              {micError}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={toggleListening}
+              className={cn(
+                "h-9 w-9 shrink-0 transition-all rounded-lg",
+                isListening
+                  ? "bg-red-600 text-white border-red-600 animate-pulse ring-2 ring-red-300 hover:bg-red-700 hover:text-white"
+                  : isTranscribing
+                  ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                  : "border-navy-200 text-navy-600 hover:bg-navy-50"
+              )}
+              title={
+                isListening
+                  ? "Listening... Click to stop"
+                  : isTranscribing
+                  ? "Transcribing voice..."
+                  : "Click to speak your question (Voice Input)"
+              }
+            >
+              <Mic className={cn("h-4 w-4", isListening && "animate-pulse")} />
+            </Button>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                isListening
+                  ? "🎙️ Listening... speak your question now"
+                  : isTranscribing
+                  ? "Transcribing your voice with AI..."
+                  : "Ask about your heart rate, BP, SpO2, or ISI..."
+              }
+              disabled={loading || isTranscribing}
+              className="flex-1 rounded-lg border border-navy-200 bg-white px-3 py-2 text-xs sm:text-sm text-navy-900 placeholder:text-navy-400 focus:outline-none focus:border-navy-500"
+            />
+            <Button
+              type="submit"
+              disabled={!input.trim() || loading}
+              size="sm"
+              className="bg-navy-900 hover:bg-navy-800 text-white h-9 px-4 gap-1 text-xs"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Send
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

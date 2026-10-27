@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   MessageSquare,
   Dumbbell,
+  Mic,
 } from "lucide-react";
+import { useVoiceInput } from "@/lib/voice/useVoiceInput";
 import type { FitnessIntent, FitRestISIContext } from "@/lib/fit-rest/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -109,6 +111,17 @@ export function FitnessAIChat() {
   const [error, setError] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const {
+    isListening,
+    isTranscribing,
+    errorMessage: micError,
+    toggleListening,
+  } = useVoiceInput({
+    onTranscript: (spokenText) => {
+      setInput((prev) => (prev ? `${prev} ${spokenText}` : spokenText));
+    },
+  });
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -309,8 +322,38 @@ export function FitnessAIChat() {
           </div>
         )}
 
+        {/* Mic Error Banner */}
+        {micError && (
+          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-lg">
+            {micError}
+          </div>
+        )}
+
         {/* ── Input row ───────────────────────────────────────────────── */}
-        <div className="flex gap-2 pt-1 shrink-0">
+        <div className="flex gap-2 pt-1 shrink-0 items-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={toggleListening}
+            className={cn(
+              "rounded-xl shrink-0 h-10 w-10 transition-all",
+              isListening
+                ? "bg-red-600 text-white border-red-600 animate-pulse ring-2 ring-red-300 hover:bg-red-700 hover:text-white"
+                : isTranscribing
+                ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                : "border-navy-200 text-navy-600 hover:bg-navy-50"
+            )}
+            title={
+              isListening
+                ? "Listening... Click to stop"
+                : isTranscribing
+                ? "Transcribing voice..."
+                : "Click to talk (Voice Input)"
+            }
+          >
+            <Mic className={cn("h-4 w-4", isListening && "animate-pulse")} />
+          </Button>
           <input
             type="text"
             value={input}
@@ -322,18 +365,22 @@ export function FitnessAIChat() {
               }
             }}
             placeholder={
-              isLoading
+              isListening
+                ? "🎙️ Listening... speak now"
+                : isTranscribing
+                ? "Transcribing voice with AI..."
+                : isLoading
                 ? "Fitness Coach is thinking…"
                 : "Ask about workouts or fitness…"
             }
-            disabled={isLoading}
+            disabled={isLoading || isTranscribing}
             className="flex-1 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm text-navy-900 placeholder:text-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-900 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <Button
             onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             size="icon"
-            className="rounded-xl shrink-0"
+            className="rounded-xl shrink-0 h-10 w-10"
             aria-label="Send message"
           >
             <Send className="h-4 w-4" />

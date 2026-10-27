@@ -25,6 +25,7 @@ import Link from 'next/link';
 
 import { filterAcousticEcho } from '@/core/utils/echo-filter';
 import { extractCardiacFindings } from '@/core/extraction/deterministic-extractor';
+import { cn } from '@/lib/utils';
 
 export default function HelplinePage() {
   const [isConnected, setIsConnected] = useState(false);
@@ -543,14 +544,49 @@ export default function HelplinePage() {
                 }}
                 className="border-t border-slate-800 bg-slate-950 p-3 flex items-center gap-2"
               >
+                {/* Direct Microphone Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isConnected) {
+                      startSession();
+                    } else if (isListening) {
+                      safeAbortRecognition();
+                    } else {
+                      stopCurrentAudio();
+                      safeStartRecognition();
+                    }
+                  }}
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all shadow-xs border",
+                    isListening
+                      ? "bg-red-600 text-white border-red-500 animate-pulse ring-2 ring-red-400"
+                      : isConnected
+                      ? "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white"
+                      : "bg-red-600/20 text-red-400 border-red-500/30 hover:bg-red-600 hover:text-white"
+                  )}
+                  title={
+                    isListening
+                      ? "Microphone is listening (click to pause)"
+                      : isConnected
+                      ? "Click to talk (Microphone)"
+                      : "Click to start live voice call"
+                  }
+                >
+                  {isListening ? (
+                    <Mic className="h-4 w-4 text-white animate-pulse" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </button>
                 <input
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder={
                     isConnected
-                      ? 'Speak into mic or type symptoms here...'
-                      : 'Type symptoms or click Start Voice Call above...'
+                      ? (isListening ? '🎙️ Listening... speak now' : 'Speak into microphone or type symptoms...')
+                      : (isListening ? '🎙️ Listening... speak now' : 'Click 🎙️ or type symptoms to start...')
                   }
                   className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 />

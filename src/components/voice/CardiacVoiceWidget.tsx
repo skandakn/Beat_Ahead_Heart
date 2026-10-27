@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { filterAcousticEcho } from '@/core/utils/echo-filter';
 import { extractCardiacFindings } from '@/core/extraction/deterministic-extractor';
+import { cn } from '@/lib/utils';
 
 interface SymptomState {
   value: any;
@@ -51,6 +52,7 @@ export function CardiacVoiceWidget() {
   const [extractedData, setExtractedData] = useState<Record<string, SymptomState>>({});
   const [statusMessage, setStatusMessage] = useState('24/7 AI Cardiac Emergency Triage');
   const [urgencyBadge, setUrgencyBadge] = useState<string | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
 
   // Audio & Echo Cancellation References
   const audioQueueRef = useRef<string[]>([]);
@@ -205,7 +207,23 @@ export function CardiacVoiceWidget() {
       safeAbortRecognition();
       speechUtteranceRef.current = utterance;
 
+      // Watchdog timeout to prevent speech synthesis freeze from locking microphone
+      const watchdogDuration = Math.max(3500, text.length * 85);
+      const watchdog = setTimeout(() => {
+        if (speechUtteranceRef.current === utterance) {
+          console.log('[Widget Watchdog] Auto-clearing speech lock after timeout');
+          speechUtteranceRef.current = null;
+          isPlayingRef.current = false;
+          isAudioPausedRef.current = false;
+          setIsSpeaking(false);
+          setIsAudioPaused(false);
+          lastAudioEndTimeRef.current = Date.now();
+          safeStartRecognition();
+        }
+      }, watchdogDuration);
+
       utterance.onend = () => {
+        clearTimeout(watchdog);
         speechUtteranceRef.current = null;
         isPlayingRef.current = false;
         isAudioPausedRef.current = false;
@@ -219,6 +237,7 @@ export function CardiacVoiceWidget() {
         }, 800);
       };
       utterance.onerror = () => {
+        clearTimeout(watchdog);
         speechUtteranceRef.current = null;
         isPlayingRef.current = false;
         setIsSpeaking(false);
@@ -407,6 +426,70 @@ export function CardiacVoiceWidget() {
     [callId, extractedData, queueAudio, speakFallback, stopCurrentAudio]
   );
 
+  // MediaRecorder Fallback using Groq Whisper
+  const startMediaRecorderCapture = useCallback(
+    (activeCallId: string) => {
+      if (typeof window === 'undefined') return;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setMicError('Microphone is not supported in this browser.');
+        setStatusMessage('Microphone unavailable. Use text box.');
+        setIsListening(false);
+        return;
+      }
+
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          mediaRecorderRef.current = recorder;
+          setIsListening(true);
+          setMicError(null);
+
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0 && !isPlayingRef.current) {
+              audioChunksRef.current.push(e.data);
+            }
+          };
+
+          recorder.onstop = async () => {
+            stream.getTracks().forEach((track) => track.stop());
+            if (audioChunksRef.current.length > 0 && !isPlayingRef.current) {
+              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+              audioChunksRef.current = [];
+              try {
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'audio.webm');
+                const res = await fetch('/api/voice/transcribe', {
+                  method: 'POST',
+                  body: formData,
+                });
+                const d = await res.json();
+                if (d.text && d.text.trim().length > 0) {
+                  sendPatientUtterance(d.text.trim(), activeCallId);
+                }
+              } catch (err) {
+                console.warn('Groq Whisper transcribe failed:', err);
+              }
+            }
+          };
+
+          recorder.start(2500);
+        })
+        .catch((err) => {
+          console.warn('MediaRecorder error:', err);
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            setMicError('Microphone permission blocked. Please allow microphone in your browser address bar.');
+            setStatusMessage('⚠️ Microphone blocked. Allow in address bar.');
+          } else {
+            setMicError('Microphone unavailable. Please type your message.');
+            setStatusMessage('Microphone unavailable. Use text box.');
+          }
+          setIsListening(false);
+        });
+    },
+    [sendPatientUtterance]
+  );
+
   // Microphone capture setup
   const startMicrophoneCapture = useCallback(
     (activeCallId: string) => {
@@ -445,7 +528,14 @@ export function CardiacVoiceWidget() {
           };
 
           recognition.onerror = (e: any) => {
-            if (e.error !== 'no-speech' && e.error !== 'aborted') {
+            console.warn('Speech recognition warning:', e.error);
+            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+              setMicError('Microphone permission blocked. Please allow microphone in your browser URL bar.');
+              setStatusMessage('⚠️ Microphone blocked. Allow in address bar.');
+              setIsListening(false);
+            } else if (e.error === 'network') {
+              startMediaRecorderCapture(activeCallId);
+            } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
               console.warn('Speech recognition warning:', e.error);
             }
           };
@@ -516,7 +606,7 @@ export function CardiacVoiceWidget() {
           });
       }
     },
-    [sendPatientUtterance]
+    [sendPatientUtterance, startMediaRecorderCapture]
   );
 
   const stopMicrophoneCapture = useCallback(() => {
@@ -610,6 +700,42 @@ export function CardiacVoiceWidget() {
     setIsSpeaking(false);
     setStatusMessage('Call finalized • Summary archived');
   }, [callId, stopCurrentAudio, stopMicrophoneCapture]);
+
+  // Manual toggle to start/pause microphone
+  const toggleMicrophone = useCallback(async () => {
+    setMicError(null);
+    if (!isConnectedRef.current) {
+      await startCall();
+      return;
+    }
+
+    if (isListening) {
+      safeAbortRecognition();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {}
+      }
+      setIsListening(false);
+    } else {
+      stopCurrentAudio();
+      isPlayingRef.current = false;
+      isAudioPausedRef.current = false;
+      setIsSpeaking(false);
+      safeStartRecognition();
+      if (!recognitionRef.current) {
+        startMicrophoneCapture(callId);
+      }
+    }
+  }, [
+    isListening,
+    startCall,
+    safeAbortRecognition,
+    stopCurrentAudio,
+    safeStartRecognition,
+    startMicrophoneCapture,
+    callId,
+  ]);
 
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -868,19 +994,59 @@ export function CardiacVoiceWidget() {
             </div>
           )}
 
-          {/* Text Input / Send Footer */}
+          {/* Mic Error Banner if any */}
+          {micError && (
+            <div className="bg-amber-950/80 border-t border-amber-600/40 px-3 py-1.5 text-[11px] text-amber-300 flex items-center justify-between gap-2">
+              <span className="truncate">{micError}</span>
+              <button
+                type="button"
+                onClick={() => setMicError(null)}
+                className="text-amber-400 hover:text-white shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Text Input / Mic / Send Footer */}
           <form
             onSubmit={handleTextSubmit}
             className="border-t border-slate-800 bg-slate-950 p-3 flex items-center gap-2"
           >
+            {/* Direct Microphone Button */}
+            <button
+              type="button"
+              onClick={toggleMicrophone}
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all shadow-xs border",
+                isListening
+                  ? "bg-red-600 text-white border-red-500 animate-pulse ring-2 ring-red-400"
+                  : isConnected
+                  ? "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white"
+                  : "bg-red-600/20 text-red-400 border-red-500/30 hover:bg-red-600 hover:text-white"
+              )}
+              title={
+                isListening
+                  ? "Microphone is listening (click to pause)"
+                  : isConnected
+                  ? "Click to talk (Microphone)"
+                  : "Click to start live voice conversation"
+              }
+            >
+              {isListening ? (
+                <Mic className="h-4 w-4 text-white animate-pulse" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </button>
             <input
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={
                 isConnected
-                  ? 'Speak or type symptoms (e.g. chest pain, arm radiating)...'
-                  : 'Type symptoms or click Start Live Voice Call...'
+                  ? (isListening ? '🎙️ Listening... speak now' : 'Speak into microphone or type symptoms...')
+                  : (isListening ? '🎙️ Listening... speak now' : 'Click 🎙️ to talk or type symptoms...')
               }
               className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
