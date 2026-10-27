@@ -48,13 +48,13 @@ function useIsOnboarding(pathname: string): boolean {
 function getNavItems(t: (key: TranslationKey) => string) {
   return [
     { href: "/dashboard", label: t("nav.overview"), icon: LayoutDashboard },
-    { href: "/monitor", label: "ECG Monitor", icon: Activity },
     { href: "/health-record", label: t("nav.healthRecord"), icon: HeartPulse },
     { href: "/trends", label: t("nav.trends"), icon: BarChart3 },
     { href: "/nutri-agent", label: t("nav.nutriAgent"), icon: Salad },
     { href: "/fitness", label: t("nav.fitnessAgent"), icon: Dumbbell },
     { href: "/rest", label: t("nav.restAgent"), icon: Moon },
     { href: "/vital-agent", label: t("nav.vitalAgent"), icon: HeartPulse },
+    { href: "/monitor", label: "ECG Monitor", icon: Activity },
     { href: "/clinician", label: t("nav.clinicianView"), icon: Stethoscope },
     { href: "/rapidcare", label: t("nav.emergency"), icon: Ambulance },
   ];
