@@ -808,25 +808,17 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                     variant="default"
                     onClick={() => void handleSync()}
                     disabled={googleFitSyncing}
-                    className={cn(
-                      "gap-1.5 transition-all duration-200",
-                      justSynced && "bg-emerald-600 hover:bg-emerald-700 text-white"
-                    )}
+                    className="gap-1.5 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                   >
                     {googleFitSyncing ? (
                       <>
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                         Syncing…
                       </>
-                    ) : justSynced ? (
-                      <>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        Synced!
-                      </>
                     ) : (
                       <>
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Sync Now
+                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        Synced
                       </>
                     )}
                   </Button>
