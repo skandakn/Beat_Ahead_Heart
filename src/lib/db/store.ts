@@ -200,34 +200,32 @@ export function updatePatientRecord(userId: string, updates: PatientRecordUpdate
   return record;
 }
 
-const ISI_STORE_FILE = getStoreFilePath("isi-records.json");
-
 export function getUserISIScore(userId = "demo-user-1"): UserISIScoreRecord | null {
+  if (inMemoryISIScores[userId]) {
+    return inMemoryISIScores[userId];
+  }
+
   ensureDirectoryExists();
   try {
-    if (fs.existsSync(ISI_STORE_FILE)) {
+    const isiFile = getStoreFilePath("isi-records.json");
+    if (fs.existsSync(isiFile)) {
       const records: Record<string, UserISIScoreRecord> = JSON.parse(
-        fs.readFileSync(ISI_STORE_FILE, "utf-8")
+        fs.readFileSync(isiFile, "utf-8")
       );
-      return records[userId] || null;
+      if (records[userId]) {
+        inMemoryISIScores[userId] = records[userId];
+        return records[userId];
+      }
     }
   } catch (err) {
-    console.error("Error reading ISI store:", err);
+    console.warn("Notice: reading ISI store falling back to memory:", err);
   }
   return null;
 }
 
 export function saveUserISIScore(userId: string, data: Partial<UserISIScoreRecord>): UserISIScoreRecord {
   ensureDirectoryExists();
-  let records: Record<string, UserISIScoreRecord> = {};
-  try {
-    if (fs.existsSync(ISI_STORE_FILE)) {
-      records = JSON.parse(fs.readFileSync(ISI_STORE_FILE, "utf-8"));
-    }
-  } catch {
-    records = {};
-  }
-  const existing = records[userId];
+  const existing = inMemoryISIScores[userId] || getUserISIScore(userId);
   const record: UserISIScoreRecord = {
     userId,
     currentScore: data.currentScore ?? existing?.currentScore ?? {
@@ -272,11 +270,23 @@ export function saveUserISIScore(userId: string, data: Partial<UserISIScoreRecor
     scenario: data.scenario ?? existing?.scenario ?? "normal",
     updatedAt: new Date().toISOString(),
   };
-  records[userId] = record;
+
+  inMemoryISIScores[userId] = record;
+
   try {
-    fs.writeFileSync(ISI_STORE_FILE, JSON.stringify(records, null, 2), "utf-8");
+    const isiFile = getStoreFilePath("isi-records.json");
+    let records: Record<string, UserISIScoreRecord> = {};
+    if (fs.existsSync(isiFile)) {
+      try {
+        records = JSON.parse(fs.readFileSync(isiFile, "utf-8"));
+      } catch {
+        records = {};
+      }
+    }
+    records[userId] = record;
+    fs.writeFileSync(isiFile, JSON.stringify(records, null, 2), "utf-8");
   } catch (err) {
-    console.error("Error writing ISI store:", err);
+    console.warn("Notice: writing ISI store falling back to memory:", err);
   }
   return record;
 }

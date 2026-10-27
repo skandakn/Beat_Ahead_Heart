@@ -434,6 +434,20 @@ function HealthRecordPageContent() {
 
   function goToStep(next: number) {
     if (next === step) return;
+    // Auto-save current progress to localStorage on step navigation
+    try {
+      const update = buildUpdate();
+      const interim = normalizePatientRecord({
+        ...record,
+        ...update,
+        userId: effectiveUserId,
+        updatedAt: new Date().toISOString(),
+      }, effectiveUserId);
+      localStorage.setItem(lsKey, JSON.stringify(interim));
+    } catch {
+      // ignore storage quota errors
+    }
+
     setAnimDir(next > step ? "forward" : "back");
     setAnimating(true);
     setTimeout(() => {
@@ -515,19 +529,43 @@ function HealthRecordPageContent() {
         bloodPressureCategory: latest.bloodPressureCategory,
         vitalsHistory,
       };
-      const res = await fetch("/api/patient-record", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: effectiveUserId, ...update }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || "Unable to save daily vitals.");
-      const saved = normalizePatientRecord(payload.record as PatientRecord, effectiveUserId);
-      localStorage.setItem(lsKey, JSON.stringify(saved));
-      setRecord(saved);
+
+      // 1. Instantly persist to local state and localStorage so values are NEVER lost
+      const locallySaved = normalizePatientRecord({
+        ...record,
+        ...update,
+        userId: effectiveUserId,
+        updatedAt: new Date().toISOString(),
+      }, effectiveUserId);
+      setRecord(locallySaved);
+      try {
+        localStorage.setItem(lsKey, JSON.stringify(locallySaved));
+      } catch {}
+
+      // 2. Sync to serverless API
+      try {
+        const res = await fetch("/api/patient-record", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: effectiveUserId, ...update }),
+        });
+        const payload = await res.json();
+        if (res.ok && payload.record) {
+          const serverSaved = normalizePatientRecord(payload.record as PatientRecord, effectiveUserId);
+          try {
+            localStorage.setItem(lsKey, JSON.stringify(serverSaved));
+          } catch {}
+          setRecord(serverSaved);
+        }
+      } catch (networkErr) {
+        console.warn("Network notice: vitals saved locally in browser:", networkErr);
+      }
+
       await refreshBaseline();
-      window.dispatchEvent(new Event("beatahead-patient-record-updated"));
-      setMessage(`Vitals for ${new Date(`${vitalsDate}T00:00:00`).toLocaleDateString()} saved.`);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("beatahead-patient-record-updated"));
+      }
+      setMessage(`Vitals for ${new Date(`${vitalsDate}T00:00:00`).toLocaleDateString()} saved successfully.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save daily vitals.");
     } finally {
@@ -541,24 +579,43 @@ function HealthRecordPageContent() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch("/api/patient-record", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: effectiveUserId, ...buildUpdate() }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || "Unable to save.");
-      const saved = payload.record as PatientRecord;
+      const update = buildUpdate();
 
-      // Persist to localStorage — this is the authoritative store on Vercel
+      // 1. Instantly persist to local state and localStorage so values are NEVER lost
+      const locallySaved = normalizePatientRecord({
+        ...record,
+        ...update,
+        userId: effectiveUserId,
+        updatedAt: new Date().toISOString(),
+      }, effectiveUserId);
+
       try {
-        localStorage.setItem(lsKey, JSON.stringify(saved));
-      } catch {
-        // Silently ignore storage quota errors
+        localStorage.setItem(lsKey, JSON.stringify(locallySaved));
+      } catch {}
+
+      setRecord(locallySaved);
+      setLists(toTextLists(locallySaved));
+
+      // 2. Sync to serverless API
+      try {
+        const res = await fetch("/api/patient-record", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: effectiveUserId, ...update }),
+        });
+        const payload = await res.json();
+        if (res.ok && payload.record) {
+          const serverSaved = normalizePatientRecord(payload.record as PatientRecord, effectiveUserId);
+          try {
+            localStorage.setItem(lsKey, JSON.stringify(serverSaved));
+          } catch {}
+          setRecord(serverSaved);
+          setLists(toTextLists(serverSaved));
+        }
+      } catch (networkErr) {
+        console.warn("Network notice: health record saved locally in browser:", networkErr);
       }
 
-      setRecord(saved);
-      setLists(toTextLists(saved));
       // Update ISI baseline immediately from new health data
       await refreshBaseline();
       if (typeof window !== "undefined") {
@@ -682,8 +739,8 @@ function HealthRecordPageContent() {
                 <div key={s.label} className="flex items-center flex-1">
                   <button
                     type="button"
-                    onClick={() => isDone && goToStep(i)}
-                    className={`flex flex-col items-center gap-2 flex-1 transition-all ${isDone ? "cursor-pointer" : "cursor-default"}`}
+                    onClick={() => goToStep(i)}
+                    className="flex flex-col items-center gap-2 flex-1 transition-all cursor-pointer"
                   >
                     <div
                       className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all duration-300
@@ -727,15 +784,6 @@ function HealthRecordPageContent() {
         {/* ── Messages ── */}
         {error && <div className="mb-4"><StatusMsg kind="error" message={error} /></div>}
         {message && <div className="mb-4"><StatusMsg kind="success" message={message} /></div>}
-
-        {/* ── Disclaimer ── */}
-        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 px-4 py-3 text-xs text-amber-300/70 mb-5 flex items-start gap-2">
-          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-400/60" />
-          <span>
-            <span className="font-semibold text-amber-300/90">Note: </span>
-            This record supports personal organization and care discussions. It does not provide a diagnosis or replace medical advice.
-          </span>
-        </div>
 
         {/* ────────────────── FORM STEPS ────────────────── */}
         <form onSubmit={saveRecord}>
@@ -1327,15 +1375,25 @@ function HealthRecordPageContent() {
               )}
 
               {step < STEPS.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => goToStep(step + 1)}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-sm font-semibold shadow-lg shadow-red-500/25 transition-all active:scale-[0.98] disabled:opacity-50"
-                >
-                  Continue
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => saveRecord()}
+                    disabled={isLoading || isSaving}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm text-white/70 hover:text-white hover:border-white/20 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? "Saving…" : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goToStep(step + 1)}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-sm font-semibold shadow-lg shadow-red-500/25 transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    Continue
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               ) : (
                 <Button
                   type="submit"
