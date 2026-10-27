@@ -271,13 +271,40 @@ export function generateTrendData(
 ): { time: string; isi: number; hrv: number; spo2: number; heartRate: number; motion: number }[] {
   const data = [];
   const points = hours === 24 ? 24 : hours === 168 ? 42 : 30;
-  const interval = (hours * 60) / points;
+  const intervalMs = (hours * 3600 * 1000) / points;
+  const now = Date.now();
+  const startTime = now - hours * 3600 * 1000;
 
   for (let i = 0; i < points; i++) {
+    const pointTime = startTime + i * intervalMs;
+    const d = new Date(pointTime);
+
+    let timeLabel: string;
+    if (hours <= 24) {
+      timeLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    } else if (hours <= 168) {
+      timeLabel = `${d.toLocaleDateString([], { weekday: 'short' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    } else {
+      timeLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    // Circadian diurnal variation based on solar time (trough at 4-6 AM, peak at 3-5 PM)
+    const hourOfDay = d.getHours() + d.getMinutes() / 60;
+    const circadian = Math.sin(((hourOfDay - 6) / 24) * 2 * Math.PI);
+    const ultradian = Math.sin(i * 1.4) * 2.2;
+
     tickCounter = Math.floor((i / points) * 100);
-    const sample = generateSample(scenario, Date.now() - (points - i) * interval * 60000, customBaseline);
-    const hour = Math.floor((i * interval) / 60);
-    const minute = Math.floor((i * interval) % 60);
+    const sample = generateSample(scenario, pointTime, customBaseline);
+
+    // Apply diurnal variation to simulated parameters
+    const hrMod = circadian * 5.5 + ultradian;
+    sample.heartRate = Math.max(45, Math.min(160, Math.round(sample.heartRate + hrMod)));
+
+    const hrvMod = -circadian * 6.5 - ultradian * 0.8;
+    sample.hrv = Math.max(15, Math.min(95, Math.round(sample.hrv + hrvMod)));
+
+    const spo2Mod = -Math.abs(circadian) * 0.4 + Math.sin(i * 0.8) * 0.3;
+    sample.spo2 = Math.max(85, Math.min(100, Math.round((sample.spo2 + spo2Mod) * 10) / 10));
 
     const feat = extractFeatures(sample, null, scenario, customBaseline);
     const computedScore = calculateISI({
@@ -286,7 +313,7 @@ export function generateTrendData(
       historicalScores: [],
       scenario,
       signalQuality: sample.signalQuality.overall,
-      timestamp: sample.timestamp,
+      timestamp: pointTime,
       rawSample: {
         heartRate: sample.heartRate,
         hrv: sample.hrv,
@@ -298,7 +325,7 @@ export function generateTrendData(
     });
 
     data.push({
-      time: `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`,
+      time: timeLabel,
       isi: computedScore.score,
       hrv: Math.round(sample.hrv),
       spo2: Math.round(sample.spo2 * 10) / 10,
