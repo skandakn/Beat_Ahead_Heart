@@ -292,18 +292,20 @@ export function generateTrendData(
     const hourOfDay = d.getHours() + d.getMinutes() / 60;
     const circadian = Math.sin(((hourOfDay - 6) / 24) * 2 * Math.PI);
     const ultradian = Math.sin(i * 1.4) * 2.2;
+    // Multi-day biological variance for 7d and 30d trajectories
+    const multiDayDrift = hours > 24 ? Math.sin((i / 7) * 2 * Math.PI) * 4.6 + Math.cos(i * 1.3) * 3.4 : 0;
 
     tickCounter = Math.floor((i / points) * 100);
     const sample = generateSample(scenario, pointTime, customBaseline);
 
-    // Apply diurnal variation to simulated parameters
-    const hrMod = circadian * 5.5 + ultradian;
+    // Apply diurnal variation and multi-day biological trajectory
+    const hrMod = circadian * 5.5 + ultradian + multiDayDrift;
     sample.heartRate = Math.max(45, Math.min(160, Math.round(sample.heartRate + hrMod)));
 
-    const hrvMod = -circadian * 6.5 - ultradian * 0.8;
+    const hrvMod = -circadian * 6.5 - ultradian * 0.8 - multiDayDrift * 0.9;
     sample.hrv = Math.max(15, Math.min(95, Math.round(sample.hrv + hrvMod)));
 
-    const spo2Mod = -Math.abs(circadian) * 0.4 + Math.sin(i * 0.8) * 0.3;
+    const spo2Mod = -Math.abs(circadian) * 0.4 + Math.sin(i * 0.8) * 0.3 + (hours > 24 ? Math.sin(i * 0.6) * 0.35 : 0);
     sample.spo2 = Math.max(85, Math.min(100, Math.round((sample.spo2 + spo2Mod) * 10) / 10));
 
     const feat = extractFeatures(sample, null, scenario, customBaseline);

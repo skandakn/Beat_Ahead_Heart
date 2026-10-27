@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import {
   createEmptyPatientRecord,
   PatientRecord,
@@ -20,8 +21,44 @@ export interface UserSubscription {
   updatedAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const STORE_FILE = path.join(DATA_DIR, "subscriptions.json");
+// In-memory fallback stores for zero-downtime reliability across serverless invocations
+const inMemorySubscriptions: Record<string, UserSubscription> = {};
+const inMemoryPatientRecords: Record<string, PatientRecord> = {};
+const inMemoryISIScores: Record<string, UserISIScoreRecord> = {};
+
+function getDataDirectory(): string {
+  // On Vercel and AWS Lambda, process.cwd() is read-only (/var/task).
+  // os.tmpdir() (/tmp) is guaranteed writable.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpDataDir = path.join(os.tmpdir(), "beatahead_data");
+    try {
+      if (!fs.existsSync(tmpDataDir)) {
+        fs.mkdirSync(tmpDataDir, { recursive: true });
+      }
+      return tmpDataDir;
+    } catch {
+      return os.tmpdir();
+    }
+  }
+
+  const localDataDir = path.join(process.cwd(), ".data");
+  try {
+    if (!fs.existsSync(localDataDir)) {
+      fs.mkdirSync(localDataDir, { recursive: true });
+    }
+    return localDataDir;
+  } catch {
+    return os.tmpdir();
+  }
+}
+
+function getStoreFilePath(filename: string): string {
+  return path.join(getDataDirectory(), filename);
+}
+
+function ensureDirectoryExists(): void {
+  getDataDirectory();
+}
 
 // Initial default state
 const defaultState: Record<string, UserSubscription> = {
@@ -32,16 +69,6 @@ const defaultState: Record<string, UserSubscription> = {
     updatedAt: new Date().toISOString(),
   },
 };
-
-function ensureDirectoryExists() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-  } catch (err) {
-    console.error("Error creating data directory:", err);
-  }
-}
 
 const PREMIUM_ACCOUNTS = [
   "skandakn13@gmail.com",
@@ -66,21 +93,24 @@ export function getSubscription(userId: string = "demo-user-1"): UserSubscriptio
     };
   }
 
-  ensureDirectoryExists();
+  if (inMemorySubscriptions[userId]) {
+    return inMemorySubscriptions[userId];
+  }
+
   try {
-    if (fs.existsSync(STORE_FILE)) {
-      const fileData = fs.readFileSync(STORE_FILE, "utf-8");
+    const storeFile = getStoreFilePath("subscriptions.json");
+    if (fs.existsSync(storeFile)) {
+      const fileData = fs.readFileSync(storeFile, "utf-8");
       const store = JSON.parse(fileData);
-      return store[userId] || {
-        userId,
-        subscriptionStatus: "inactive",
-        subscriptionPlan: "Free",
-        updatedAt: new Date().toISOString(),
-      };
+      if (store[userId]) {
+        inMemorySubscriptions[userId] = store[userId];
+        return store[userId];
+      }
     }
   } catch (err) {
-    console.error("Error reading subscription store:", err);
+    console.warn("Notice: reading subscription store falling back to memory:", err);
   }
+
   return defaultState[userId] || {
     userId,
     subscriptionStatus: "inactive",
@@ -90,23 +120,7 @@ export function getSubscription(userId: string = "demo-user-1"): UserSubscriptio
 }
 
 export function updateSubscription(userId: string = "demo-user-1", updates: Partial<UserSubscription>): UserSubscription {
-  ensureDirectoryExists();
-  let store: Record<string, UserSubscription> = {};
-  try {
-    if (fs.existsSync(STORE_FILE)) {
-      const fileData = fs.readFileSync(STORE_FILE, "utf-8");
-      store = JSON.parse(fileData);
-    }
-  } catch {
-    store = {};
-  }
-
-  const current = store[userId] || {
-    userId,
-    subscriptionStatus: "inactive",
-    subscriptionPlan: "Free",
-    updatedAt: new Date().toISOString(),
-  };
+  const current = inMemorySubscriptions[userId] || getSubscription(userId);
 
   const updated: UserSubscription = {
     ...current,
@@ -114,43 +128,79 @@ export function updateSubscription(userId: string = "demo-user-1", updates: Part
     updatedAt: new Date().toISOString(),
   };
 
-  store[userId] = updated;
+  inMemorySubscriptions[userId] = updated;
 
   try {
-    fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), "utf-8");
+    const storeFile = getStoreFilePath("subscriptions.json");
+    let store: Record<string, UserSubscription> = {};
+    if (fs.existsSync(storeFile)) {
+      try {
+        store = JSON.parse(fs.readFileSync(storeFile, "utf-8"));
+      } catch {
+        store = {};
+      }
+    }
+    store[userId] = updated;
+    fs.writeFileSync(storeFile, JSON.stringify(store, null, 2), "utf-8");
   } catch (err) {
-    console.error("Error writing subscription store:", err);
+    console.warn("Notice: subscription file write fallback to memory:", err);
   }
 
   return updated;
 }
-const PATIENT_RECORD_FILE = path.join(DATA_DIR, "patient-records.json");
+
 export function getPatientRecord(userId = "demo-user-1"): PatientRecord {
-  ensureDirectoryExists();
-  try {
-    const records: Record<string, PatientRecord> = fs.existsSync(PATIENT_RECORD_FILE)
-      ? JSON.parse(fs.readFileSync(PATIENT_RECORD_FILE, "utf-8")) : {};
-    return records[userId] || createEmptyPatientRecord(userId);
-  } catch {
-    return createEmptyPatientRecord(userId);
+  if (inMemoryPatientRecords[userId]) {
+    return inMemoryPatientRecords[userId];
   }
+
+  try {
+    const patientFile = getStoreFilePath("patient-records.json");
+    if (fs.existsSync(patientFile)) {
+      const records: Record<string, PatientRecord> = JSON.parse(fs.readFileSync(patientFile, "utf-8"));
+      if (records[userId]) {
+        inMemoryPatientRecords[userId] = records[userId];
+        return records[userId];
+      }
+    }
+  } catch (err) {
+    console.warn("Notice: reading patient records falling back to memory:", err);
+  }
+
+  return createEmptyPatientRecord(userId);
 }
+
 export function updatePatientRecord(userId: string, updates: PatientRecordUpdate): PatientRecord {
-  ensureDirectoryExists();
-  let records: Record<string, PatientRecord> = {};
+  const current = inMemoryPatientRecords[userId] || getPatientRecord(userId);
+  const record: PatientRecord = {
+    ...current,
+    ...updates,
+    userId,
+    updatedAt: new Date().toISOString(),
+  };
+
+  inMemoryPatientRecords[userId] = record;
+
   try {
-    if (fs.existsSync(PATIENT_RECORD_FILE)) records = JSON.parse(fs.readFileSync(PATIENT_RECORD_FILE, "utf-8"));
-  } catch {
-    records = {};
+    const patientFile = getStoreFilePath("patient-records.json");
+    let records: Record<string, PatientRecord> = {};
+    if (fs.existsSync(patientFile)) {
+      try {
+        records = JSON.parse(fs.readFileSync(patientFile, "utf-8"));
+      } catch {
+        records = {};
+      }
+    }
+    records[userId] = record;
+    fs.writeFileSync(patientFile, JSON.stringify(records, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Notice: patient record file write fallback to memory:", err);
   }
-  const current = records[userId] || createEmptyPatientRecord(userId);
-  const record: PatientRecord = { ...current, ...updates, userId, updatedAt: new Date().toISOString() };
-  records[userId] = record;
-  fs.writeFileSync(PATIENT_RECORD_FILE, JSON.stringify(records, null, 2), "utf-8");
+
   return record;
 }
 
-const ISI_STORE_FILE = path.join(DATA_DIR, "isi-records.json");
+const ISI_STORE_FILE = getStoreFilePath("isi-records.json");
 
 export function getUserISIScore(userId = "demo-user-1"): UserISIScoreRecord | null {
   ensureDirectoryExists();
