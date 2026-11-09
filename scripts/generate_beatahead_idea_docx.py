@@ -299,7 +299,7 @@ meta_data = [
     ["Project Title", "Ischemic Stress Index (ISI): An AI Framework for Early Cardiac Risk Assessment"],
     ["Project Lead", "Skanda K N (skandakn13@gmail.com | +91 8088347176)"],
     ["Co-Developer", "S Chiranjeevi"],
-    ["Live Cloud Deployment", "https://beat-ahead.vercel.app/ (Multi-Service Production Vercel Cluster)"],
+    ["Live Cloud Deployment", "https://beataheadheart.vercel.app/ (Multi-Service Production Vercel Cluster)"],
     ["GitHub Repository", "https://github.com/skandakn/beat_ahead & https://github.com/skandakn/Beat_Ahead_Heart"],
     ["Target Clinical Problem", "Prospective Early Warning of Intraoperative & Ambulatory Myocardial Ischemia (5-Min Lead Gap)"],
     ["Machine Learning Backbone", "Frozen 150-Tree XGBoost Model (scale_pos_weight=230.65, Threshold=0.156742, AUROC=0.8896)"],

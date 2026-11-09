@@ -272,14 +272,14 @@ def main():
     <div style="text-align: right; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 6px; font-size: 7.5pt;">
       <div><strong>TARGET PAGES</strong>: /dashboard, /trends, /insights</div>
       <div><strong>MODEL FREEZE</strong>: XGBoost Matrix A (&tau; = 0.156742)</div>
-      <div><strong>PLATFORM</strong>: prevention-of-heart-attack-txdb.vercel.app</div>
+      <div><strong>PLATFORM</strong>: beataheadheart.vercel.app</div>
     </div>
   </div>
 
   <div class="meta-grid">
     <div class="meta-item">
       <strong>Live Web App</strong>
-      <span>prevention-of-heart-attack-txdb.vercel.app</span>
+      <span>beataheadheart.vercel.app</span>
     </div>
     <div class="meta-item">
       <strong>Total Presentation Time</strong>
@@ -517,7 +517,7 @@ def main():
     </p>
     <p>
       <strong>[2:30 - 3:00 | Impact & Closing]</strong><br>
-      "BeatAhead is fully deployed and production-ready on Vercel at <code>prevention-of-heart-attack-txdb.vercel.app</code>. By turning retrospective surgical monitors into predictive, explainable clinical decision support, BeatAhead helps save lives and saves hospitals over $750,000 annually. Thank you, and we welcome your questions!"
+      "BeatAhead is fully deployed and production-ready on Vercel at <code>beataheadheart.vercel.app</code>. By turning retrospective surgical monitors into predictive, explainable clinical decision support, BeatAhead helps save lives and saves hospitals over $750,000 annually. Thank you, and we welcome your questions!"
     </p>
   </div>
 </div>
@@ -573,7 +573,7 @@ def main():
 </table>
 
 <div style="margin-top: 24px; text-align: center; border-top: 1px solid #cbd5e1; padding-top: 8px; font-size: 7.5pt; color: #64748b;">
-  <strong>BeatAhead Presentation Guide</strong> &bull; Deployed at <a href="https://prevention-of-heart-attack-txdb.vercel.app/">prevention-of-heart-attack-txdb.vercel.app</a> &bull; GitHub: <a href="https://github.com/skandakn/prevention-of-heart-attack">skandakn/prevention-of-heart-attack</a>
+  <strong>BeatAhead Presentation Guide</strong> &bull; Deployed at <a href="https://beataheadheart.vercel.app/">beataheadheart.vercel.app</a> &bull; GitHub: <a href="https://github.com/skandakn/Beat_Ahead_Heart">skandakn/prevention-of-heart-attack</a>
 </div>
 
 </body>

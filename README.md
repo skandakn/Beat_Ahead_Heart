@@ -3,8 +3,8 @@
 # 🫀 BeatAhead — Ischemic Stress Index (ISI)
 ### Multi-Modal Physiological AI Early-Warning Platform for Perioperative Myocardial Ischemia & Prevention of Heart Attacks
 
-[![Live Deployed Web App](https://img.shields.io/badge/Live%20Platform-Vercel%20Production-success?style=for-the-badge&logo=vercel&logoColor=white)](https://prevention-of-heart-attack-txdb.vercel.app/)
-[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/skandakn/prevention-of-heart-attack)
+[![Live Deployed Web App](https://img.shields.io/badge/Live%20Platform-Vercel%20Production-success?style=for-the-badge&logo=vercel&logoColor=white)](https://beataheadheart.vercel.app/)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/skandakn/Beat_Ahead_Heart)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15.1.0-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -15,7 +15,7 @@
 
 <br />
 
-**[🚀 Live Demo](https://prevention-of-heart-attack-txdb.vercel.app/)** • **[📑 Hackathon Technical PDF](BeatAhead_ML_Model_and_System_Hackathon_Guide.pdf)** • **[🎤 Judge Presentation Speech](BeatAhead_Judge_Presentation_Speech_and_Defense.pdf)** • **[🧬 Methodology](/methodology)**
+**[🚀 Live Demo](https://beataheadheart.vercel.app/)** • **[📑 Hackathon Technical PDF](BeatAhead_ML_Model_and_System_Hackathon_Guide.pdf)** • **[🎤 Judge Presentation Speech](BeatAhead_Judge_Presentation_Speech_and_Defense.pdf)** • **[🧬 Methodology](/methodology)**
 
 </div>
 
@@ -208,8 +208,8 @@ All 26 features are derived strictly from the observation window ($T_{\text{obs}
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/skandakn/prevention-of-heart-attack.git
-cd prevention-of-heart-attack
+git clone https://github.com/skandakn/Beat_Ahead_Heart.git
+cd Beat_Ahead_Heart
 npm install
 ```
 

@@ -130,7 +130,7 @@ def main():
             else:
                 print("  RESULT: GOOD SIGNAL DETECTED!")
                 print("  -> Hardware is working correctly")
-                print("  -> Open https://beataheadheart-l4x4.vercel.app/monitor")
+                print("  -> Open https://beataheadheart.vercel.app/monitor")
                 print("  -> in Google Chrome and click 'Connect Arduino USB'")
 
         elif exclamations > count * 0.8:

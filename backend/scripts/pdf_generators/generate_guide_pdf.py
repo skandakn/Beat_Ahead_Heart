@@ -372,11 +372,11 @@ def main():
   <div class="meta-grid">
     <div class="meta-item">
       <strong>Live Deployed Platform</strong>
-      <a href="https://prevention-of-heart-attack-txdb.vercel.app/" target="_blank">prevention-of-heart-attack-txdb.vercel.app</a>
+      <a href="https://beataheadheart.vercel.app/" target="_blank">beataheadheart.vercel.app</a>
     </div>
     <div class="meta-item">
       <strong>GitHub Repository</strong>
-      <a href="https://github.com/skandakn/prevention-of-heart-attack" target="_blank">github.com/skandakn/prevention-of-heart-attack</a>
+      <a href="https://github.com/skandakn/Beat_Ahead_Heart" target="_blank">github.com/skandakn/Beat_Ahead_Heart</a>
     </div>
     <div class="meta-item">
       <strong>ML Architecture</strong>
@@ -633,7 +633,7 @@ Static thresholds fail because every patient has distinct resting heart rates, S
 <h2><span class="sec-badge">SEC 5</span> Website Implementation & Full-Stack Architecture</h2>
 
 <p>
-The live web platform is accessible at <a href="https://prevention-of-heart-attack-txdb.vercel.app/" target="_blank"><strong>https://prevention-of-heart-attack-txdb.vercel.app/</strong></a>. It is built on <strong>Next.js 15.1.0</strong> (App Router), <strong>React 19</strong>, <strong>TypeScript</strong>, and <strong>TailwindCSS</strong>, structured into 38 optimized routes.
+The live web platform is accessible at <a href="https://beataheadheart.vercel.app/" target="_blank"><strong>https://beataheadheart.vercel.app/</strong></a>. It is built on <strong>Next.js 15.1.0</strong> (App Router), <strong>React 19</strong>, <strong>TypeScript</strong>, and <strong>TailwindCSS</strong>, structured into 38 optimized routes.
 </p>
 
 <div class="card card-emerald">
@@ -814,7 +814,7 @@ This section contains anticipated questions from technical, medical, systems, an
     <strong>Answer:</strong> "We built a <strong>3-tier resilient inference architecture</strong> in <code>src/app/api/ml/predict/route.ts</code>:
     <br>1. <strong>Primary (Cloud Run Microservice):</strong> In production, Next.js communicates over HTTP/JSON with a dedicated FastAPI container hosting the frozen model artifact (<code>beatahead_phase5_model.joblib</code>) with SHA-256 integrity verification.
     <br>2. <strong>Secondary (Local CLI Daemon):</strong> For local developer workstations, Next.js seamlessly spawns the local Python virtual environment using <code>execFileSync</code>.
-    <br>3. <strong>Tertiary (Calibrated In-Process Edge Evaluator):</strong> For serverless environments like Vercel edge nodes where external daemons may have latency or network restrictions, we built an audited mathematical evaluator calibrated directly against Phase 5 regression weights. This guarantees that our live web demo at <code>prevention-of-heart-attack-txdb.vercel.app</code> never crashes, never throws a 500 error, and executes in &lt; 2 milliseconds."
+    <br>3. <strong>Tertiary (Calibrated In-Process Edge Evaluator):</strong> For serverless environments like Vercel edge nodes where external daemons may have latency or network restrictions, we built an audited mathematical evaluator calibrated directly against Phase 5 regression weights. This guarantees that our live web demo at <code>beataheadheart.vercel.app</code> never crashes, never throws a 500 error, and executes in &lt; 2 milliseconds."
   </div>
 </div>
 
@@ -909,7 +909,7 @@ This section contains anticipated questions from technical, medical, systems, an
     <em>Crucially, we instituted a strict 5-minute lead-time gap to prove true advance prediction with zero data leakage. Our frozen XGBoost model achieves an AUROC of 0.8896 and a PR-AUC of 0.3247—75 times higher than chance—with an exceptional 99.71% specificity.</em>
   </p>
   <p>
-    <em>As you can see on our live deployed platform at <code>prevention-of-heart-attack-txdb.vercel.app</code>, this isn't just a Jupyter notebook. It's an end-to-end clinical platform: real-time waveform oscilloscopes, SHAP explainability cards, automated clinician reports with SHA-256 provenance hashes, and autonomous emergency phone dispatch via Exotel and ElevenLabs. BeatAhead turns retrospective surgical alarms into proactive, preventative cardiac care."</em>
+    <em>As you can see on our live deployed platform at <code>beataheadheart.vercel.app</code>, this isn't just a Jupyter notebook. It's an end-to-end clinical platform: real-time waveform oscilloscopes, SHAP explainability cards, automated clinician reports with SHA-256 provenance hashes, and autonomous emergency phone dispatch via Exotel and ElevenLabs. BeatAhead turns retrospective surgical alarms into proactive, preventative cardiac care."</em>
   </p>
 </div>
 
@@ -924,7 +924,7 @@ This section contains anticipated questions from technical, medical, systems, an
 </ol>
 
 <div style="margin-top: 24px; text-align: center; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 8pt; color: #64748b;">
-  <strong>BeatAhead Hackathon Master Technical Document</strong> &bull; Deployed at <a href="https://prevention-of-heart-attack-txdb.vercel.app/">prevention-of-heart-attack-txdb.vercel.app</a> &bull; GitHub: <a href="https://github.com/skandakn/prevention-of-heart-attack">skandakn/prevention-of-heart-attack</a>
+  <strong>BeatAhead Hackathon Master Technical Document</strong> &bull; Deployed at <a href="https://beataheadheart.vercel.app/">beataheadheart.vercel.app</a> &bull; GitHub: <a href="https://github.com/skandakn/Beat_Ahead_Heart">skandakn/prevention-of-heart-attack</a>
 </div>
 
 </body>

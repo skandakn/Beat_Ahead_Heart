@@ -16,7 +16,7 @@ const OVERPASS_MIRRORS = [
   'https://z.overpass-api.de/api/interpreter',
 ];
 
-const OSM_USER_AGENT = 'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beataheadheart-l4x4.vercel.app; skanda.kn@gmail.com)';
+const OSM_USER_AGENT = 'BeatAhead-EmergencyAssistance/1.0 (Emergency healthcare directory; https://beataheadheart.vercel.app; skanda.kn@gmail.com)';
 
 // In-memory cache to respect OpenStreetMap usage policies (10-minute TTL)
 interface CacheEntry {

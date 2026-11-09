@@ -39,7 +39,7 @@ For optimal cardiac axis orientation (Lead II), snap the 3-lead cables onto gel 
 
 ## 4. Connecting Directly to BeatAhead Web App
 
-1. Open the live BeatAhead application: [https://beataheadheart-l4x4.vercel.app/monitor](https://beataheadheart-l4x4.vercel.app/monitor) in Google Chrome or Microsoft Edge.
+1. Open the live BeatAhead application: [https://beataheadheart.vercel.app/monitor](https://beataheadheart.vercel.app/monitor) in Google Chrome or Microsoft Edge.
 2. Click **"Connect Arduino USB (Web Serial)"**.
 3. Select your Arduino UNO from the browser prompt and click **Connect**.
 4. The live sweeping medical oscilloscope will immediately begin rendering the cardiac waveform, detecting instantaneous heart rate, and tracking ST-segment ischemic deviations in real time!

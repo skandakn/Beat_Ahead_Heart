@@ -1,4 +1,4 @@
-# BeatAhead - Auto Upload Arduino Sketch (No IDE Required)
+﻿# BeatAhead - Auto Upload Arduino Sketch (No IDE Required)
 # Run this in PowerShell as Administrator:
 #   cd c:\ischemic
 #   .\scripts\upload_sketch.ps1
@@ -76,7 +76,7 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  1. Run diagnostic:  python scripts/serial_debug.py --port $Port"
-Write-Host "  2. Open Chrome:     https://beataheadheart-l4x4.vercel.app/monitor"
+Write-Host "  2. Open Chrome:     https://beataheadheart.vercel.app/monitor"
 Write-Host "  3. Click 'Connect Arduino USB' and select $Port"
 Write-Host "  4. Put electrode pads on chest and watch live ECG!"
 Write-Host ""

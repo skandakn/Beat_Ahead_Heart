@@ -273,7 +273,7 @@ CRITICAL CLINICAL RULES:
    - Advise chewing 325 mg unbuffered aspirin immediately if they have no aspirin allergy and no active stomach bleeding.
    - Instruct them never to drive themselves to the hospital.
 5. If the caller asks about their BeatAhead Ischemic Stress Index (ISI), explain that scores above 65 indicate significant ischemic burden and warrant clinical verification.
-6. The BeatAhead platform is running live at https://prevention-of-heart-attack-txdb.vercel.app/.`,
+6. The BeatAhead platform is running live at https://beataheadheart.vercel.app/.`,
       greeting: "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?",
       language: process.env.DEFAULT_LANGUAGE || 'en',
       extractionSchema: cardiacExtractionSchema,
