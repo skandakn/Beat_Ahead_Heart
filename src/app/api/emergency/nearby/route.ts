@@ -48,14 +48,13 @@ export async function POST(req: NextRequest) {
       longitude < -180 ||
       longitude > 180
     ) {
-      const fallback = getFallbackEmergencyFacilities();
-      return NextResponse.json<EmergencyNearbyResponse>({
-        success: true,
-        places: fallback,
-        totalResults: fallback.length,
-        source: 'openstreetmap',
-        attribution: OSM_ATTRIBUTION,
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid or missing geographical coordinates (latitude: [-90, 90], longitude: [-180, 180]).',
+        },
+        { status: 400 }
+      );
     }
 
     // Radius in km (default 10 km as requested)
@@ -122,16 +121,19 @@ export async function GET(req: NextRequest) {
       latitude === undefined ||
       longitude === undefined ||
       isNaN(latitude) ||
-      isNaN(longitude)
+      isNaN(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
     ) {
-      const fallback = getFallbackEmergencyFacilities();
-      return NextResponse.json<EmergencyNearbyResponse>({
-        success: true,
-        places: fallback,
-        totalResults: fallback.length,
-        source: 'openstreetmap',
-        attribution: OSM_ATTRIBUTION,
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Please provide valid latitude and longitude coordinates (-90 to 90, -180 to 180).',
+        },
+        { status: 400 }
+      );
     }
 
     const places = await queryOverpassNearby(latitude, longitude, radiusKm);
