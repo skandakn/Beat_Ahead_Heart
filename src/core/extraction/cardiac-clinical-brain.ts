@@ -7,6 +7,9 @@ export function generateEmergencyCardiacFallback(
 ): LLMResponse {
   const lower = (userText || "").toLowerCase();
   const findings = extractCardiacFindings(userText);
+  const alreadyExecutedTools = options?.messages?.some(
+    (m) => m.role === "tool" || (m.role === "assistant" && m.content?.startsWith("Called tool"))
+  );
 
   // 1. Critical Red Flag Emergency
   if (
@@ -24,18 +27,20 @@ export function generateEmergencyCardiacFallback(
 
     return {
       text: response,
-      toolCalls: [
-        {
-          id: `tool_${Date.now()}_urgency`,
-          name: "assess_cardiac_urgency",
-          arguments: {
-            chest_pressure: true,
-            radiating_pain: /\bradiat\b/i.test(lower),
-            diaphoresis: /\bsweat\b/i.test(lower),
-            pain_scale: typeof painScale === "number" ? painScale : 8,
-          },
-        },
-      ],
+      toolCalls: alreadyExecutedTools
+        ? undefined
+        : [
+            {
+              id: `tool_${Date.now()}_urgency`,
+              name: "assess_cardiac_urgency",
+              arguments: {
+                chest_pressure: true,
+                radiating_pain: /\bradiat\b/i.test(lower),
+                diaphoresis: /\bsweat\b/i.test(lower),
+                pain_scale: typeof painScale === "number" ? painScale : 8,
+              },
+            },
+          ],
     };
   }
 
@@ -46,17 +51,19 @@ export function generateEmergencyCardiacFallback(
   ) {
     return {
       text: "I hear that you are experiencing noticeable breathing difficulty or racing pulse. Please sit down comfortably, loosen any tight clothing around your neck or chest, and take slow, steady breaths. If this started suddenly or worsens, please have someone take you to urgent care or call emergency services.",
-      toolCalls: [
-        {
-          id: `tool_${Date.now()}_urgency`,
-          name: "assess_cardiac_urgency",
-          arguments: {
-            chest_pressure: false,
-            radiating_pain: false,
-            pain_scale: 5,
-          },
-        },
-      ],
+      toolCalls: alreadyExecutedTools
+        ? undefined
+        : [
+            {
+              id: `tool_${Date.now()}_urgency`,
+              name: "assess_cardiac_urgency",
+              arguments: {
+                chest_pressure: false,
+                radiating_pain: false,
+                pain_scale: 5,
+              },
+            },
+          ],
     };
   }
 
@@ -64,13 +71,15 @@ export function generateEmergencyCardiacFallback(
   if (/\b(isi|ischemic stress|score|biomarker|wearable|smartwatch)\b/i.test(lower)) {
     return {
       text: "The Ischemic Stress Index (ISI) integrates your HRV autonomic entropy, pulse wave morphological delays, and ST-segment trends into a 0 to 100 risk score. Scores above 65 indicate elevated ischemic strain and warrant a formal consultation with a cardiologist.",
-      toolCalls: [
-        {
-          id: `tool_${Date.now()}_isi`,
-          name: "retrieve_patient_isi_baseline",
-          arguments: { patient_id: "current" },
-        },
-      ],
+      toolCalls: alreadyExecutedTools
+        ? undefined
+        : [
+            {
+              id: `tool_${Date.now()}_isi`,
+              name: "retrieve_patient_isi_baseline",
+              arguments: { patient_id: "current" },
+            },
+          ],
     };
   }
 

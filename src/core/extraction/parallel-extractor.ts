@@ -82,7 +82,9 @@ export class ParallelExtractor {
    * Synchronous flush for tests or end-of-call: waits for all queued extraction passes to settle.
    */
   public async flush(): Promise<ExtractedDataState> {
+    const start = Date.now();
     while (this.utteranceQueue.length > 0 || this.isProcessing) {
+      if (Date.now() - start > 1500) break; // 1.5s safeguard against hanging flushes
       await new Promise((res) => setTimeout(res, 30));
     }
     return this.getCurrentState();

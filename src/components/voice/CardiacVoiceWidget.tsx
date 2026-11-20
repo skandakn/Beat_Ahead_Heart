@@ -44,6 +44,7 @@ export function CardiacVoiceWidget() {
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [callId, setCallId] = useState<string>('');
+  const callIdRef = useRef<string>('');
   const [callDuration, setCallDuration] = useState(0);
   const [textInput, setTextInput] = useState('');
   const [transcripts, setTranscripts] = useState<
@@ -323,7 +324,9 @@ export function CardiacVoiceWidget() {
 
   // Send turn to Voice Agent backend
   const sendPatientUtterance = useCallback(
-    async (message: string, currentCallId = callId) => {
+    async (message: string, currentCallId?: string) => {
+      const activeCallId = currentCallId || callIdRef.current || callId || `cardiac_browser_${Date.now()}`;
+      callIdRef.current = activeCallId;
       if (!message || message.trim().length === 0) return;
 
       const trimmed = message.trim();
@@ -371,7 +374,7 @@ export function CardiacVoiceWidget() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'utterance',
-            callId: currentCallId,
+            callId: activeCallId,
             message: cleanText,
           }),
         });
@@ -626,6 +629,7 @@ export function CardiacVoiceWidget() {
     try {
       stopCurrentAudio();
       const newCallId = `cardiac_browser_${Date.now()}`;
+      callIdRef.current = newCallId;
       setCallId(newCallId);
       setIsConnected(true);
       isConnectedRef.current = true;
@@ -672,6 +676,7 @@ export function CardiacVoiceWidget() {
         }
 
         startMicrophoneCapture(newCallId);
+        return newCallId;
       }
     } catch (err: any) {
       console.error('Failed to start call:', err);
@@ -743,12 +748,12 @@ export function CardiacVoiceWidget() {
     const msg = textInput.trim();
     setTextInput('');
 
-    if (!isConnected) {
-      startCall().then(() => {
-        setTimeout(() => sendPatientUtterance(msg), 1000);
+    if (!isConnectedRef.current) {
+      startCall().then((newId) => {
+        setTimeout(() => sendPatientUtterance(msg, newId), 300);
       });
     } else {
-      sendPatientUtterance(msg);
+      sendPatientUtterance(msg, callIdRef.current);
     }
   };
 

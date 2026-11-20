@@ -127,9 +127,14 @@ SPOKEN VOICE CONVERSATION RULES:
 
       const toolExecutions: any[] = [];
 
-      // Handle function / tool calling loop if requested by LLM
-      while (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
-        for (const toolCall of llmResponse.toolCalls) {
+      // Handle function / tool calling loop if requested by LLM (capped to 2 iterations max)
+      let toolIterations = 0;
+      while (llmResponse.toolCalls && llmResponse.toolCalls.length > 0 && toolIterations < 2) {
+        toolIterations++;
+        const currentCalls = [...llmResponse.toolCalls];
+        llmResponse.toolCalls = undefined; // prevent duplicate loops
+
+        for (const toolCall of currentCalls) {
           const toolResult = await this.toolRegistry.executeTool(toolCall, {
             callId: session.callId,
             callerId: session.callerId,

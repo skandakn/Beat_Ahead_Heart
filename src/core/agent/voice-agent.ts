@@ -218,14 +218,29 @@ export class VoiceAgent {
     }
 
     // 3 & 4. Concurrent execution: Conversation Agent response + Structured Data Extraction pass
-    const extractor = this.activeExtractors.get(callId);
-    if (extractor) {
-      extractor.enqueueUtterance(trimmedText);
+    let extractor = this.activeExtractors.get(callId);
+    if (!extractor) {
+      extractor = new ParallelExtractor(
+        this.config.extractionSchema,
+        this.llmProvider,
+        session.structuredData
+      );
+      this.activeExtractors.set(callId, extractor);
     }
+    extractor.enqueueUtterance(trimmedText);
 
-    const conversation = this.activeConversations.get(callId);
+    let conversation = this.activeConversations.get(callId);
     if (!conversation) {
-      throw new Error(`Active conversation for ${callId} not found.`);
+      conversation = new ConversationManager({
+        llmProvider: this.llmProvider,
+        toolRegistry: this.toolRegistry,
+        systemPrompt: this.config.systemPrompt,
+        businessContext: this.config.businessContext,
+        greeting: this.config.greeting,
+        language: this.config.language || 'en',
+      });
+      conversation.initialize();
+      this.activeConversations.set(callId, conversation);
     }
 
     // Run conversational generation and extraction concurrently
@@ -234,7 +249,7 @@ export class VoiceAgent {
       extractor
         ? Promise.race([
             extractor.flush(),
-            new Promise((resolve) => setTimeout(resolve, 4000)), // timeout safeguard
+            new Promise((resolve) => setTimeout(resolve, 2500)), // timeout safeguard
           ])
         : Promise.resolve(),
     ]);
