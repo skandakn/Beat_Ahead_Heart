@@ -346,22 +346,12 @@ export function LiveEcgMonitor() {
               <Activity className="w-5 h-5 animate-pulse" />
             </div>
             <h2 className="text-xl font-bold text-navy-900">AD8232 Live ECG Hardware Monitor</h2>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border",
-                isConnected
-                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                  : "bg-blue-100 text-blue-800 border-blue-200"
-              )}
-            >
-              <Radio
-                className={cn(
-                  "w-3 h-3",
-                  isConnected ? "text-emerald-600 animate-ping" : "text-blue-600"
-                )}
-              />
-              {isConnected ? "HARDWARE STREAMING (ACTIVE)" : "SIMULATION PREVIEW"}
-            </span>
+            {isConnected && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">
+                <Radio className="w-3 h-3 text-emerald-600 animate-ping" />
+                HARDWARE STREAMING (ACTIVE)
+              </span>
+            )}
           </div>
           <p className="text-xs text-navy-500 mt-1">
             Real-time Lead II physiological bio-potential monitoring via Arduino UNO and SparkFun AD8232 analog front-end.
@@ -418,27 +408,7 @@ export function LiveEcgMonitor() {
             </Button>
           )}
 
-          {/* Live Ischemia Trigger for Judging Demo */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleIschemiaDemo}
-            className={cn(
-              "font-bold transition-all shadow-xs border",
-              isIschemiaDemoActive
-                ? "bg-red-600 text-white border-red-700 hover:bg-red-700 animate-pulse ring-2 ring-red-400"
-                : "bg-amber-500/10 text-amber-700 border-amber-300 hover:bg-amber-500/20"
-            )}
-            title={
-              isIschemiaDemoActive
-                ? "Click to deactivate Ischemia Demo and return to normal"
-                : "Click to simulate Acute Ischemia (ST depression -1.6mm, High ISI) for Judges"
-            }
-          >
-            <AlertTriangle className={cn("w-4 h-4 mr-1.5", isIschemiaDemoActive ? "text-white" : "text-amber-600")} />
-            {isIschemiaDemoActive ? "🚨 Ischemia Active (Reset)" : "⚡ Demo Ischemia to Judges"}
-          </Button>
-
+          {/* Freeze & Sound Action Buttons */}
           <Button
             variant="outline"
             size="sm"
@@ -468,60 +438,6 @@ export function LiveEcgMonitor() {
           </Button>
         </div>
       </div>
-
-      {/* Emergency Ischemia Active Alert Banner (When Demo or Ischemic Preset Active) */}
-      {isIschemiaDemoActive && (
-        <div className="p-4 bg-red-600/15 border-2 border-red-500 rounded-xl flex items-center justify-between flex-wrap gap-4 animate-pulse text-red-950 shadow-md">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-lg bg-red-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
-              🚨
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black tracking-wider uppercase text-red-700 bg-red-100 px-2.5 py-0.5 rounded border border-red-300">
-                  Live Judge Demonstration Active
-                </span>
-                <span className="text-xs font-bold text-red-700">
-                  Subendocardial ST Depression (-1.60 mm) &bull; Critical ISI ({isiScore}/100)
-                </span>
-              </div>
-              <p className="text-xs text-red-800 mt-1 leading-relaxed">
-                Acute myocardial ischemia protocol triggered on live Lead II waveform. Continuous chronotropic tachycardia ({heartRate} BPM) and J-point depression &le; -1.0 mm detected.
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            onClick={toggleIschemiaDemo}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold shrink-0 shadow-sm"
-          >
-            Reset to Baseline
-          </Button>
-        </div>
-      )}
-
-      {/* Brave Browser Shield Warning */}
-      {isBrave && (
-        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-xs animate-in fade-in duration-200">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              Brave Browser Detected &mdash; Web Serial Blocked by Default
-            </div>
-            <p className="text-amber-800 leading-relaxed">
-              Brave Shields block direct USB/Serial device enumeration by default, resulting in &quot;No compatible devices found&quot;.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
-                &bull; Quick Fix 1 (Recommended): Open in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.
-              </span>
-              <span className="font-semibold bg-white/90 px-2 py-0.5 rounded border border-amber-300 text-amber-950">
-                &bull; Quick Fix 2: Click the orange <strong>Brave Lion Shield</strong> icon next to the URL bar &rarr; turn Shields <strong>OFF</strong> for this site.
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Hardware Troubleshooting Modal/Card */}
       {showTroubleshoot && (
@@ -992,8 +908,8 @@ export function LiveEcgMonitor() {
                 {dspFilterActive ? "0.5–40 Hz Bandpass + 50Hz Notch (Active)" : "Raw Unfiltered"}
               </span>
             </div>
-            <div>Status: <span className={cn("font-bold", preset === "leads_off" ? "text-red-400 animate-pulse" : isIschemiaDemoActive ? "text-red-400" : "text-emerald-400")}>
-              {preset === "leads_off" ? "⚠ LEADS-OFF FAULT (SIMULATION)" : isIschemiaDemoActive ? "🚨 JUDGE DEMO: ISCHEMIA" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Preset Mode"}
+            <div>Status: <span className={cn("font-bold", preset === "leads_off" ? "text-red-400 animate-pulse" : "text-emerald-400")}>
+              {preset === "leads_off" ? "⚠ LEADS-OFF FAULT" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Telemetry Active"}
             </span></div>
           </div>
         </div>
