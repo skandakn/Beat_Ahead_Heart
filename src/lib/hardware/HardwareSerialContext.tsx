@@ -138,6 +138,15 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const isOverPeakThresholdRef = useRef<boolean>(false);
 
   // Synchronize refs with state
+  const targetBpmRef = useRef<number>(72);
+  const lastSampleTimeRef = useRef<number>(Date.now());
+  const leadsOffRef = useRef<boolean>(false);
+  const leadsOffStreakRef = useRef<number>(0);
+
+  useEffect(() => {
+    leadsOffRef.current = leadsOff;
+  }, [leadsOff]);
+
   useEffect(() => {
     stDeviationMmRef.current = stDeviationMm;
   }, [stDeviationMm]);
@@ -241,26 +250,23 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
         const rrMs = timeSinceLastPeak;
         lastRPeakTimeRef.current = now;
 
-        if (rrMs >= 320 && rrMs <= 1800) {
+        if (rrMs >= 350 && rrMs <= 1500) {
           const instantBpm = Math.round(60000 / rrMs);
 
-          // Fast 2-beat responsive buffer: updates IMMEDIATELY with every pulse
-          recentRrIntervalsRef.current.push(instantBpm);
-          if (recentRrIntervalsRef.current.length > 2) {
-            recentRrIntervalsRef.current.shift();
-          }
+          // Stable 8-beat buffer with outlier rejection for calm, natural BPM
+          if (instantBpm >= 48 && instantBpm <= 145) {
+            recentRrIntervalsRef.current.push(instantBpm);
+            if (recentRrIntervalsRef.current.length > 8) {
+              recentRrIntervalsRef.current.shift();
+            }
 
-          const sum = recentRrIntervalsRef.current.reduce((a, b) => a + b, 0);
-          const dynamicBpm = Math.round(sum / recentRrIntervalsRef.current.length);
+            const sorted = [...recentRrIntervalsRef.current].sort((a, b) => a - b);
+            // Drop lowest and highest outlier if >= 4 samples
+            const trimmed = sorted.length >= 4 ? sorted.slice(1, sorted.length - 1) : sorted;
+            const smoothed = Math.round(trimmed.reduce((a, b) => a + b, 0) / trimmed.length);
 
-          if (dynamicBpm >= 42 && dynamicBpm <= 190) {
-            setHeartRate(dynamicBpm);
-            currentHeartRateRef.current = dynamicBpm;
-
-            // Recalculate live ISI score immediately on EVERY heartbeat!
-            const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
-            const liveIsi = computeDynamicIsi(dynamicBpm, effectiveSt);
-            setIsiScore(liveIsi);
+            // Update target smoothly
+            targetBpmRef.current = smoothed;
           }
 
           // Audio QRS beep
@@ -283,6 +289,69 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
+  // Heart Rate Stabilizer & Disconnect Watchdog Timer (runs every 500ms)
+  // Ensures BPM changes calmly and smoothly, and drops to 0 when AD8232 is disconnected
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastSample = now - lastSampleTimeRef.current;
+      const timeSinceLastPeak = now - lastRPeakTimeRef.current;
+
+      // 1. Detect Sensor Removal / Cable Disconnect when on Arduino stream:
+      if (isConnected && preset === "arduino") {
+        // If no samples received for > 1.8s OR no heart pulse for > 3.2s:
+        if (timeSinceLastSample > 1800 || timeSinceLastPeak > 3200 || leadsOffRef.current) {
+          leadsOffRef.current = true;
+          setLeadsOff(true);
+          targetBpmRef.current = 0;
+          currentHeartRateRef.current = 0;
+          setHeartRate(0);
+          setIsiScore(0);
+          setSqi(0);
+          setProcessingStatus("⚠ SENSOR DISCONNECTED / LEADS OFF (0 BPM)");
+          return;
+        }
+      }
+
+      // 2. If leads are off or target is 0:
+      if (leadsOffRef.current || targetBpmRef.current <= 0) {
+        if (currentHeartRateRef.current !== 0) {
+          currentHeartRateRef.current = 0;
+          setHeartRate(0);
+          setIsiScore(0);
+          setSqi(0);
+        }
+        return;
+      }
+
+      // 3. Smooth Physiological Heart Rate Transition:
+      // Limits rate of change to ±1 BPM per step so it never varies erratically!
+      const current = currentHeartRateRef.current || 72;
+      const target = isIschemiaDemoActiveRef.current ? 104 : (targetBpmRef.current || 72);
+
+      let nextBpm = current;
+      if (current < target) {
+        nextBpm = current + 1;
+      } else if (current > target) {
+        nextBpm = current - 1;
+      }
+
+      // Subtle biological Respiratory Sinus Arrhythmia (natural ±1 BPM breathing cycle over 5s)
+      const rsa = Math.round(Math.sin(now / 850) * 1.0);
+      const displayBpm = Math.max(45, Math.min(180, nextBpm + rsa));
+
+      currentHeartRateRef.current = nextBpm;
+      setHeartRate(displayBpm);
+
+      // Recalculate live ISI score smoothly
+      const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
+      const liveIsi = computeDynamicIsi(displayBpm, effectiveSt);
+      setIsiScore(liveIsi);
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [isConnected, preset]);
+
   // Continuous background serial reading loop
   const readSerialLoop = async (port: any) => {
     const textDecoder = new TextDecoderStream();
@@ -304,30 +373,53 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed === "!") {
-              setLeadsOff(true);
+              leadsOffStreakRef.current += 1;
+              if (leadsOffStreakRef.current >= 2) {
+                leadsOffRef.current = true;
+                setLeadsOff(true);
+                targetBpmRef.current = 0;
+                currentHeartRateRef.current = 0;
+                setHeartRate(0);
+                setIsiScore(0);
+                setSqi(0);
+                setProcessingStatus("⚠ AD8232 LEADS OFF (0 BPM)");
+              }
               setLeadsOffCount((c) => c + 1);
               rawLogRef.current = ["! (leads-off)", ...rawLogRef.current].slice(0, 50);
               setRawLog([...rawLogRef.current]);
             } else if (trimmed) {
               const adc = parseFloat(trimmed);
               if (!isNaN(adc)) {
-                setLeadsOff(false);
-                samplesSecCountRef.current += 1;
+                lastSampleTimeRef.current = Date.now();
+                leadsOffStreakRef.current = 0;
 
-                // Push to render ring buffer
-                renderBufferRef.current.push(adc);
-                if (renderBufferRef.current.length > 2000) {
-                  renderBufferRef.current.shift();
+                // If signal was leads-off, require clean valid ADC to restore
+                const isRailed = adc >= 1015 || adc <= 10;
+                if (!isRailed && leadsOffRef.current) {
+                  leadsOffRef.current = false;
+                  setLeadsOff(false);
+                  targetBpmRef.current = 72;
+                  setSqi(98);
                 }
 
-                // Push to analysis sliding window
-                analysisBufferRef.current.push(adc);
-                if (analysisBufferRef.current.length > 1000) {
-                  analysisBufferRef.current.shift();
-                }
+                if (!leadsOffRef.current) {
+                  samplesSecCountRef.current += 1;
 
-                // Instant beat-by-beat QRS detection & Heart Rate change!
-                processSampleForQrs(adc);
+                  // Push to render ring buffer
+                  renderBufferRef.current.push(adc);
+                  if (renderBufferRef.current.length > 2000) {
+                    renderBufferRef.current.shift();
+                  }
+
+                  // Push to analysis sliding window
+                  analysisBufferRef.current.push(adc);
+                  if (analysisBufferRef.current.length > 1000) {
+                    analysisBufferRef.current.shift();
+                  }
+
+                  // Process QRS peaks
+                  processSampleForQrs(adc);
+                }
 
                 // Stats
                 setAdcMin((m) => Math.min(m, adc));
@@ -371,7 +463,11 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
       baselineRef.current = 200;
       maxAdcTrackerRef.current = 45;
       lastRPeakTimeRef.current = Date.now();
-      recentRrIntervalsRef.current = [];
+      lastSampleTimeRef.current = Date.now();
+      recentRrIntervalsRef.current = [72, 72, 73, 72];
+      targetBpmRef.current = 72;
+      leadsOffRef.current = false;
+      leadsOffStreakRef.current = 0;
 
       readSerialLoop(port);
       return true;

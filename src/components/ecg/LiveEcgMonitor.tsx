@@ -81,73 +81,80 @@ export function LiveEcgMonitor() {
   const synthBufferRef = useRef<number[]>([]);
   // Clinical DSP Filter & Medical Stabilizer (Active by default to ensure clean, accurate ECG presentation)
   const [dspFilterActive, setDspFilterActive] = useState<boolean>(true);
+  // Continuous phase accumulator (ensures zero phase jumps or stuttering when heart rate adjusts)
+  const phaseRef = useRef<number>(0);
 
   // Real-Time Diagnostic Lead II Waveform Generator & Clinical DSP Synthesizer
   // (Active when disconnected, or when DSP Clinical Filter is active on live hardware stream)
   useEffect(() => {
     if (isConnected && preset === "arduino" && !dspFilterActive) return;
 
-    let t = 0;
     const interval = setInterval(() => {
       if (isFrozen) return;
 
-      if (preset === "leads_off") {
-        setLeadsOff(true);
+      // When preset is explicitly leads_off or sensor leads are disconnected:
+      if (preset === "leads_off" || leadsOff || heartRate <= 0) {
+        // Send flatline isoelectric zero
+        synthBufferRef.current.push(512);
+        if (synthBufferRef.current.length > 500) {
+          synthBufferRef.current.shift();
+        }
         return;
       }
-      setLeadsOff(false);
 
-      // Period based on dynamic heart rate from context (e.g. 73 BPM)
-      const period = 60 / Math.max(40, heartRate);
-      const phase = (t % period) / period; // 0 to 1
+      // Smooth continuous phase integration: rate changes smoothly without sudden waveform jumping
+      const currentBpm = Math.max(40, Math.min(180, heartRate));
+      const period = 60 / currentBpm;
+      phaseRef.current = (phaseRef.current + 0.005 / period) % 1.0;
+      const phase = phaseRef.current;
 
       let val = 512;
 
-      // P Wave (Atrial depolarization - smooth, rounded)
-      if (phase >= 0.10 && phase <= 0.20) {
-        val += 25 * Math.sin(((phase - 0.10) / 0.10) * Math.PI);
+      // 1. Natural P Wave (Atrial depolarization - smooth, rounded dome)
+      if (phase >= 0.12 && phase <= 0.22) {
+        val += 24 * Math.sin(((phase - 0.12) / 0.10) * Math.PI);
       }
-      // Q Dip (Septal depolarization)
-      else if (phase >= 0.28 && phase <= 0.30) {
-        val -= 30 * Math.sin(((phase - 0.28) / 0.02) * Math.PI);
+      // 2. PR Segment (Clean isoelectric baseline)
+      // 3. Q Dip (Septal depolarization - crisp, narrow downward dip)
+      else if (phase >= 0.285 && phase <= 0.305) {
+        val -= 28 * Math.sin(((phase - 0.285) / 0.02) * Math.PI);
       }
-      // R Peak (Ventricular depolarization - tall, crisp spike)
-      else if (phase > 0.30 && phase <= 0.34) {
-        val += 180 * Math.sin(((phase - 0.30) / 0.04) * Math.PI);
-        if (phase > 0.31 && phase < 0.33) {
+      // 4. R Peak (Ventricular depolarization - tall, razor-sharp Lead II spike)
+      else if (phase > 0.305 && phase <= 0.345) {
+        val += 180 * Math.sin(((phase - 0.305) / 0.04) * Math.PI);
+        if (phase > 0.32 && phase < 0.33) {
           playBeep();
         }
       }
-      // S Dip (Purkinje return)
-      else if (phase > 0.34 && phase <= 0.38) {
-        val -= 50 * Math.sin(((phase - 0.34) / 0.04) * Math.PI);
+      // 5. S Dip (Purkinje return - crisp negative deflection)
+      else if (phase > 0.345 && phase <= 0.380) {
+        val -= 48 * Math.sin(((phase - 0.345) / 0.035) * Math.PI);
       }
-      // ST Segment & T Wave (Ventricular repolarization)
-      else if (phase > 0.38 && phase <= 0.70) {
+      // 6. ST Segment & T Wave (Ventricular repolarization)
+      else if (phase > 0.380 && phase <= 0.70) {
         // Direct physiological ST-segment displacement
         val += stDeviationMm * 24.0;
         
-        // T-wave inversion during Acute Ischemia
+        // T-wave (smooth rounded asymmetric dome, inverted during Acute Ischemia)
         if (preset === "ischemic" || isIschemiaDemoActive || stDeviationMm <= -1.0) {
-          val -= 38 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
+          val -= 36 * Math.sin(((phase - 0.44) / 0.24) * Math.PI);
         } else {
-          val += 50 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
+          val += 48 * Math.sin(((phase - 0.44) / 0.24) * Math.PI);
         }
       }
+      // 7. TP Segment (Resting baseline)
 
-      // Realistic biological micro-fluctuation (0.5–40 Hz physiological noise)
-      val += (Math.random() - 0.5) * 3.5;
+      // Subtle biological micro-fluctuation (< +/- 1.5 count)
+      val += (Math.random() - 0.5) * 2.0;
 
       synthBufferRef.current.push(val);
       if (synthBufferRef.current.length > 500) {
         synthBufferRef.current.shift();
       }
-
-      t += 0.005;
     }, 5);
 
     return () => clearInterval(interval);
-  }, [isConnected, preset, isFrozen, heartRate, stDeviationMm, playBeep, setLeadsOff, dspFilterActive, isIschemiaDemoActive]);
+  }, [isConnected, preset, isFrozen, heartRate, stDeviationMm, playBeep, dspFilterActive, isIschemiaDemoActive, leadsOff]);
 
   // Handle Connect Click
   const handleConnectClick = async () => {
@@ -278,12 +285,12 @@ export function LiveEcgMonitor() {
           ctx.fillRect(currentX + eraseWidth - 2, 0, 2, height);
 
           // Draw ECG Trace
-          if (leadsOff) {
+          if (leadsOff || heartRate <= 0) {
             ctx.strokeStyle = "#EF4444";
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(currentX - 1, midY);
-            ctx.lineTo(currentX + 1, midY);
+            ctx.lineTo(currentX, midY);
             ctx.stroke();
           } else {
             ctx.strokeStyle = isAlert ? "#EF4444" : "#22C55E";
@@ -326,6 +333,7 @@ export function LiveEcgMonitor() {
     stDeviationMm,
     isIschemiaDemoActive,
     dspFilterActive,
+    heartRate,
     drainSamples,
   ]);
 
@@ -682,49 +690,52 @@ export function LiveEcgMonitor() {
       {/* 4 Primary Telemetry Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Heart Rate */}
-        <Card className={cn("border-navy-100 shadow-xs transition-colors", isIschemiaDemoActive && "border-red-300 bg-red-50/20")}>
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", (leadsOff || heartRate === 0) ? "border-red-300 bg-red-50/25" : isIschemiaDemoActive && "border-red-300 bg-red-50/20")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-navy-600">Heart Rate</span>
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", (leadsOff || heartRate === 0) ? "bg-red-400" : "bg-emerald-400")}></span>
+                  <span className={cn("relative inline-flex rounded-full h-2 w-2", (leadsOff || heartRate === 0) ? "bg-red-500" : "bg-emerald-500")}></span>
                 </span>
               </div>
               <Heart
                 className={cn(
-                  "w-4 h-4 text-cardiac",
-                  heartRate > 90 || isIschemiaDemoActive ? "animate-ping" : "animate-pulse"
+                  "w-4 h-4",
+                  (leadsOff || heartRate === 0) ? "text-red-400" : "text-cardiac",
+                  heartRate > 90 || isIschemiaDemoActive ? "animate-ping" : (leadsOff || heartRate === 0) ? "" : "animate-pulse"
                 )}
                 fill="currentColor"
               />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-navy-900 font-mono tracking-tight">{heartRate}</span>
+              <span className={cn("text-3xl font-extrabold font-mono tracking-tight", (leadsOff || heartRate === 0) ? "text-red-600" : "text-navy-900")}>
+                {leadsOff || heartRate === 0 ? "0" : heartRate}
+              </span>
               <span className="text-xs text-navy-400 font-medium">BPM</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                LIVE
+              <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border", (leadsOff || heartRate === 0) ? "bg-red-100 text-red-800 border-red-300" : "bg-emerald-100 text-emerald-800 border-emerald-200")}>
+                {leadsOff || heartRate === 0 ? "LEADS OFF" : "LIVE"}
               </span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
               R-R Interval:{" "}
               <span className="font-semibold text-navy-700 font-mono">
-                {Math.round(60000 / Math.max(1, heartRate))} ms
+                {leadsOff || heartRate === 0 ? "-- ms" : `${Math.round(60000 / Math.max(1, heartRate))} ms`}
               </span>
             </p>
           </CardContent>
         </Card>
 
         {/* ST-Segment Deviation */}
-        <Card className={cn("border-navy-100 shadow-xs transition-colors", (isIschemiaDemoActive || stDeviationMm <= -1.0) && "border-red-300 bg-red-50/30")}>
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", (leadsOff || heartRate === 0) ? "border-navy-200" : (isIschemiaDemoActive || stDeviationMm <= -1.0) && "border-red-300 bg-red-50/30")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <span className="font-semibold text-navy-600">ST Deviation</span>
               <Activity
                 className={cn(
                   "w-4 h-4",
-                  (isIschemiaDemoActive || stDeviationMm <= -1.0) ? "text-red-600 animate-pulse" : "text-emerald-500"
+                  (leadsOff || heartRate === 0) ? "text-gray-400" : (isIschemiaDemoActive || stDeviationMm <= -1.0) ? "text-red-600 animate-pulse" : "text-emerald-500"
                 )}
               />
             </div>
@@ -732,21 +743,27 @@ export function LiveEcgMonitor() {
               <span
                 className={cn(
                   "text-3xl font-extrabold font-mono tracking-tight",
-                  (isIschemiaDemoActive || stDeviationMm <= -1.0)
+                  (leadsOff || heartRate === 0)
+                    ? "text-gray-500"
+                    : (isIschemiaDemoActive || stDeviationMm <= -1.0)
                     ? "text-red-600"
                     : stDeviationMm <= -0.5
                     ? "text-amber-500"
                     : "text-emerald-600"
                 )}
               >
-                {stDeviationMm >= 0
+                {leadsOff || heartRate === 0
+                  ? "0.00"
+                  : stDeviationMm >= 0
                   ? `+${stDeviationMm.toFixed(2)}`
                   : stDeviationMm.toFixed(2)}
               </span>
               <span className="text-xs text-navy-400 font-medium">mm (mV/10)</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              {(isIschemiaDemoActive || stDeviationMm <= -1.0) ? (
+              {leadsOff || heartRate === 0 ? (
+                <span className="text-red-500 font-medium">⚠ Leads Disconnected</span>
+              ) : (isIschemiaDemoActive || stDeviationMm <= -1.0) ? (
                 <span className="text-red-600 font-bold">🚨 Ischemic ST Depression</span>
               ) : stDeviationMm <= -0.5 ? (
                 <span className="text-amber-600 font-medium">⚠️ Mild ST Sagging</span>
@@ -758,20 +775,22 @@ export function LiveEcgMonitor() {
         </Card>
 
         {/* Real-time ISI Stress Score */}
-        <Card className={cn("border-navy-100 shadow-xs transition-colors", (isIschemiaDemoActive || isiScore >= 70) && "border-red-400 bg-red-50/40 ring-1 ring-red-400")}>
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", (leadsOff || heartRate === 0) ? "border-navy-200" : (isIschemiaDemoActive || isiScore >= 70) && "border-red-400 bg-red-50/40 ring-1 ring-red-400")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-navy-600">Ischemic Stress Index</span>
                 <span className="relative flex h-2 w-2">
-                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", (isiScore >= 70 || isIschemiaDemoActive) ? "bg-red-400" : "bg-emerald-400")}></span>
-                  <span className={cn("relative inline-flex rounded-full h-2 w-2", (isiScore >= 70 || isIschemiaDemoActive) ? "bg-red-500" : "bg-emerald-500")}></span>
+                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", (leadsOff || heartRate === 0) ? "bg-gray-400" : (isiScore >= 70 || isIschemiaDemoActive) ? "bg-red-400" : "bg-emerald-400")}></span>
+                  <span className={cn("relative inline-flex rounded-full h-2 w-2", (leadsOff || heartRate === 0) ? "bg-gray-400" : (isiScore >= 70 || isIschemiaDemoActive) ? "bg-red-500" : "bg-emerald-500")}></span>
                 </span>
               </div>
               <ShieldAlert
                 className={cn(
                   "w-4 h-4",
-                  (isIschemiaDemoActive || isiScore >= 70)
+                  (leadsOff || heartRate === 0)
+                    ? "text-gray-400"
+                    : (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600 animate-bounce"
                     : isiScore >= 40
                     ? "text-amber-500"
@@ -783,25 +802,29 @@ export function LiveEcgMonitor() {
               <span
                 className={cn(
                   "text-3xl font-extrabold font-mono tracking-tight",
-                  (isIschemiaDemoActive || isiScore >= 70)
+                  (leadsOff || heartRate === 0)
+                    ? "text-gray-500"
+                    : (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600"
                     : isiScore >= 40
                     ? "text-amber-500"
                     : "text-emerald-600"
                 )}
               >
-                {isiScore}
+                {leadsOff || heartRate === 0 ? "0" : isiScore}
               </span>
               <span className="text-xs text-navy-400 font-medium">/ 100</span>
               <span className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border",
-                (isIschemiaDemoActive || isiScore >= 70)
+                (leadsOff || heartRate === 0)
+                  ? "bg-gray-100 text-gray-700 border-gray-300"
+                  : (isIschemiaDemoActive || isiScore >= 70)
                   ? "bg-red-100 text-red-800 border-red-300"
                   : isiScore >= 40
                   ? "bg-amber-100 text-amber-800 border-amber-300"
                   : "bg-emerald-100 text-emerald-800 border-emerald-300"
               )}>
-                {(isIschemiaDemoActive || isiScore >= 70) ? "CRITICAL" : isiScore >= 40 ? "ELEVATED" : "NORMAL"}
+                {(leadsOff || heartRate === 0) ? "INACTIVE" : (isIschemiaDemoActive || isiScore >= 70) ? "CRITICAL" : isiScore >= 40 ? "ELEVATED" : "NORMAL"}
               </span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
@@ -809,14 +832,16 @@ export function LiveEcgMonitor() {
               <span
                 className={cn(
                   "font-bold",
-                  (isIschemiaDemoActive || isiScore >= 70)
+                  (leadsOff || heartRate === 0)
+                    ? "text-gray-500"
+                    : (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600"
                     : isiScore >= 40
                     ? "text-amber-600"
                     : "text-emerald-600"
                 )}
               >
-                {(isIschemiaDemoActive || isiScore >= 70) ? "Critical Ischemia" : isiScore >= 40 ? "Elevated Strain" : "Normal Sinus"}
+                {(leadsOff || heartRate === 0) ? "Sensor Off" : (isIschemiaDemoActive || isiScore >= 70) ? "Critical Ischemia" : isiScore >= 40 ? "Elevated Strain" : "Normal Sinus"}
               </span>
             </p>
           </CardContent>
@@ -830,7 +855,7 @@ export function LiveEcgMonitor() {
               <Radio
                 className={cn(
                   "w-4 h-4",
-                  isConnected ? "text-emerald-500 animate-pulse" : "text-navy-400"
+                  (leadsOff || heartRate === 0) ? "text-red-500" : isConnected ? "text-emerald-500 animate-pulse" : "text-navy-400"
                 )}
               />
             </div>
@@ -840,7 +865,9 @@ export function LiveEcgMonitor() {
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
               Quality:{" "}
-              <span className="font-semibold text-emerald-600">{sqi}% SQI</span>{" "}
+              <span className={cn("font-semibold", (leadsOff || heartRate === 0) ? "text-red-600" : "text-emerald-600")}>
+                {leadsOff || heartRate === 0 ? "0% SQI (Leads Off)" : `${sqi}% SQI`}
+              </span>{" "}
               <span className="text-navy-400">({portName})</span>
             </p>
           </CardContent>
@@ -964,15 +991,19 @@ export function LiveEcgMonitor() {
                 mm
               </span>
             </div>
-            <div>R-R Mean: {Math.round(60000 / Math.max(1, heartRate))} ms &bull; HR: {heartRate} BPM</div>
-            <div>ISI Stress: <span className={cn("font-bold", (isIschemiaDemoActive || isiScore >= 70) ? "text-red-400" : "text-emerald-400")}>{isiScore}/100</span></div>
+            <div>
+              R-R Mean: {leadsOff || heartRate <= 0 ? "-- ms" : `${Math.round(60000 / Math.max(1, heartRate))} ms`} &bull; HR: {leadsOff || heartRate <= 0 ? 0 : heartRate} BPM
+            </div>
+            <div>ISI Stress: <span className={cn("font-bold", (isIschemiaDemoActive || isiScore >= 70) ? "text-red-400" : (leadsOff || heartRate <= 0) ? "text-gray-400" : "text-emerald-400")}>{leadsOff || heartRate <= 0 ? 0 : isiScore}/100</span></div>
             <div>
               Filter:{" "}
               <span className="font-bold text-emerald-300">
                 {dspFilterActive ? "0.5–40 Hz Bandpass + 50Hz Notch (Active)" : "Raw Unfiltered"}
               </span>
             </div>
-            <div>Status: <span className={cn("font-bold", isIschemiaDemoActive ? "text-red-400" : "text-emerald-400")}>{isIschemiaDemoActive ? "🚨 JUDGE DEMO: ISCHEMIA" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Preset Mode"}</span></div>
+            <div>Status: <span className={cn("font-bold", (leadsOff || heartRate <= 0) ? "text-red-400 animate-pulse" : isIschemiaDemoActive ? "text-red-400" : "text-emerald-400")}>
+              {leadsOff || heartRate <= 0 ? "⚠ LEADS DISCONNECTED / SENSOR OFF" : isIschemiaDemoActive ? "🚨 JUDGE DEMO: ISCHEMIA" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Preset Mode"}
+            </span></div>
           </div>
         </div>
       </Card>
