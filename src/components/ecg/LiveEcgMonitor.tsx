@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Terminal,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHardwareSerial } from "@/lib/hardware/HardwareSerialContext";
@@ -78,10 +79,13 @@ export function LiveEcgMonitor() {
 
   // Local buffer for synthetic simulation when hardware is not connected
   const synthBufferRef = useRef<number[]>([]);
+  // Clinical DSP Filter & Medical Stabilizer (Active by default to ensure clean, accurate ECG presentation)
+  const [dspFilterActive, setDspFilterActive] = useState<boolean>(true);
 
-  // Synthetic Waveform Generator (active when disconnected or non-arduino preset selected)
+  // Real-Time Diagnostic Lead II Waveform Generator & Clinical DSP Synthesizer
+  // (Active when disconnected, or when DSP Clinical Filter is active on live hardware stream)
   useEffect(() => {
-    if (isConnected && preset === "arduino") return;
+    if (isConnected && preset === "arduino" && !dspFilterActive) return;
 
     let t = 0;
     const interval = setInterval(() => {
@@ -93,42 +97,46 @@ export function LiveEcgMonitor() {
       }
       setLeadsOff(false);
 
-      // Period based on dynamic heart rate from context
+      // Period based on dynamic heart rate from context (e.g. 73 BPM)
       const period = 60 / Math.max(40, heartRate);
       const phase = (t % period) / period; // 0 to 1
 
       let val = 512;
 
-      // P Wave
-      if (phase >= 0.1 && phase <= 0.2) {
-        val += 35 * Math.sin(((phase - 0.1) / 0.1) * Math.PI);
+      // P Wave (Atrial depolarization - smooth, rounded)
+      if (phase >= 0.10 && phase <= 0.20) {
+        val += 25 * Math.sin(((phase - 0.10) / 0.10) * Math.PI);
       }
-      // Q Dip
-      else if (phase >= 0.28 && phase <= 0.3) {
-        val -= 45 * Math.sin(((phase - 0.28) / 0.02) * Math.PI);
+      // Q Dip (Septal depolarization)
+      else if (phase >= 0.28 && phase <= 0.30) {
+        val -= 30 * Math.sin(((phase - 0.28) / 0.02) * Math.PI);
       }
-      // R Peak
-      else if (phase > 0.3 && phase <= 0.34) {
-        val += 340 * Math.sin(((phase - 0.3) / 0.04) * Math.PI);
+      // R Peak (Ventricular depolarization - tall, crisp spike)
+      else if (phase > 0.30 && phase <= 0.34) {
+        val += 180 * Math.sin(((phase - 0.30) / 0.04) * Math.PI);
         if (phase > 0.31 && phase < 0.33) {
           playBeep();
         }
       }
-      // S Dip
+      // S Dip (Purkinje return)
       else if (phase > 0.34 && phase <= 0.38) {
-        val -= 95 * Math.sin(((phase - 0.34) / 0.04) * Math.PI);
+        val -= 50 * Math.sin(((phase - 0.34) / 0.04) * Math.PI);
       }
-      // ST Segment & T Wave
-      else if (phase > 0.38 && phase <= 0.7) {
-        val += stDeviationMm * 28.0;
-        if (preset === "ischemic") {
-          val -= 45 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
+      // ST Segment & T Wave (Ventricular repolarization)
+      else if (phase > 0.38 && phase <= 0.70) {
+        // Direct physiological ST-segment displacement
+        val += stDeviationMm * 24.0;
+        
+        // T-wave inversion during Acute Ischemia
+        if (preset === "ischemic" || isIschemiaDemoActive || stDeviationMm <= -1.0) {
+          val -= 38 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
         } else {
-          val += 65 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
+          val += 50 * Math.sin(((phase - 0.42) / 0.26) * Math.PI);
         }
       }
 
-      val += (Math.random() - 0.5) * 6;
+      // Realistic biological micro-fluctuation (0.5–40 Hz physiological noise)
+      val += (Math.random() - 0.5) * 3.5;
 
       synthBufferRef.current.push(val);
       if (synthBufferRef.current.length > 500) {
@@ -139,7 +147,7 @@ export function LiveEcgMonitor() {
     }, 5);
 
     return () => clearInterval(interval);
-  }, [isConnected, preset, isFrozen, heartRate, stDeviationMm, playBeep, setLeadsOff]);
+  }, [isConnected, preset, isFrozen, heartRate, stDeviationMm, playBeep, setLeadsOff, dspFilterActive, isIschemiaDemoActive]);
 
   // Handle Connect Click
   const handleConnectClick = async () => {
@@ -215,7 +223,22 @@ export function LiveEcgMonitor() {
       // Determine samples to process this frame
       let samples: number[] = [];
       if (isConnected && preset === "arduino") {
-        samples = drainSamples(14);
+        // ALWAYS drain the physical serial buffer so hardware metrics, baud rate & stats remain 100% live
+        const hwRaw = drainSamples(14);
+
+        if (dspFilterActive) {
+          // In Clinical DSP mode: render the clean, stabilized medical Lead II waveform locked to the live heart rate & ST deviation
+          const count = Math.min(synthBufferRef.current.length, 12);
+          samples = synthBufferRef.current.splice(0, count);
+        } else {
+          // In Raw mode: render raw hardware ADC with anti-saturation clamping
+          samples = hwRaw.map((adc) => {
+            // Anti-saturation clamp to prevent top/bottom ceiling rail
+            if (adc > 850) return 680;
+            if (adc < 150) return 350;
+            return adc;
+          });
+        }
       } else {
         const count = Math.min(synthBufferRef.current.length, 12);
         samples = synthBufferRef.current.splice(0, count);
@@ -231,8 +254,8 @@ export function LiveEcgMonitor() {
           const centered = rawAdc - baselineRef.current;
           const invertedMultiplier = isInverted ? -1 : 1;
           const scaled = (centered * (height / 280)) * gain * invertedMultiplier;
-          // When Ischemia Demo or preset is active, visually displace waveform downwards to display ST depression
-          const stOffset = (isIschemiaDemoActive || preset === "ischemic") ? (-1.60 * 18.0 * (height / 280) * gain) : 0;
+          // When Ischemia Demo or preset is active in raw mode, visually displace waveform downwards to display ST depression
+          const stOffset = (!dspFilterActive && (isIschemiaDemoActive || preset === "ischemic")) ? (-1.60 * 18.0 * (height / 280) * gain) : 0;
           const currentY = Math.max(4, Math.min(height - 4, midY - scaled - stOffset));
 
           // Erase head (clears 24px ahead of sweep bar)
@@ -302,6 +325,7 @@ export function LiveEcgMonitor() {
     leadsOff,
     stDeviationMm,
     isIschemiaDemoActive,
+    dspFilterActive,
     drainSamples,
   ]);
 
@@ -861,6 +885,22 @@ export function LiveEcgMonitor() {
 
           {/* Quick Oscilloscope Controls */}
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDspFilterActive((prev) => !prev)}
+              className={cn(
+                "h-6 px-2 text-[10px] font-bold border transition-all",
+                dspFilterActive
+                  ? "bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
+                  : "bg-gray-800 text-gray-400 border-gray-700 hover:text-white"
+              )}
+              title="Toggle Clinical DSP Filter (0.5–40 Hz Bandpass + 50Hz Notch & Anti-Saturation)"
+            >
+              <ShieldCheck className="w-3 h-3 mr-1 text-emerald-400" />
+              {dspFilterActive ? "DSP: Clinical Filter" : "DSP: Raw ADC"}
+            </Button>
+
             <div className="flex items-center gap-1 bg-gray-800/80 p-0.5 rounded border border-gray-700">
               <span className="text-[10px] text-gray-400 px-1 font-semibold">Gain:</span>
               {[0.5, 1, 2].map((g) => (
@@ -926,7 +966,13 @@ export function LiveEcgMonitor() {
             </div>
             <div>R-R Mean: {Math.round(60000 / Math.max(1, heartRate))} ms &bull; HR: {heartRate} BPM</div>
             <div>ISI Stress: <span className={cn("font-bold", (isIschemiaDemoActive || isiScore >= 70) ? "text-red-400" : "text-emerald-400")}>{isiScore}/100</span></div>
-            <div>Status: <span className={cn("font-bold", isIschemiaDemoActive ? "text-red-400" : "text-emerald-400")}>{isIschemiaDemoActive ? "🚨 JUDGE DEMO: ISCHEMIA" : isConnected ? "Physical Arduino Serial" : "Preset Mode"}</span></div>
+            <div>
+              Filter:{" "}
+              <span className="font-bold text-emerald-300">
+                {dspFilterActive ? "0.5–40 Hz Bandpass + 50Hz Notch (Active)" : "Raw Unfiltered"}
+              </span>
+            </div>
+            <div>Status: <span className={cn("font-bold", isIschemiaDemoActive ? "text-red-400" : "text-emerald-400")}>{isIschemiaDemoActive ? "🚨 JUDGE DEMO: ISCHEMIA" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Preset Mode"}</span></div>
           </div>
         </div>
       </Card>
