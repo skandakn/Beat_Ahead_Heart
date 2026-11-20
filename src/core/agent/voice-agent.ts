@@ -141,18 +141,20 @@ export class VoiceAgent {
 
     this.activeExtractors.set(session.callId, extractor);
 
-    // Pre-synthesize greeting audio if TTS provider is available
+    // Pre-synthesize greeting audio only for telephony mode where provider handles streaming
     let greetingAudio: Buffer | undefined;
-    try {
-      greetingAudio = await this.ttsProvider.synthesizeSpeech(greeting, {
-        voiceId: this.config.voiceId,
-        model: this.config.ttsModel,
-        format: options.mode === 'phone' ? { container: 'mulaw', sampleRate: 8000 } : { container: 'mp3', sampleRate: 44100 },
-        latencyOptimized: true,
-      });
-    } catch (e: any) {
-      if (process.env.DEBUG_LOGGING === 'true') {
-        console.warn('[VoiceAgent] Could not synthesize greeting audio:', e.message);
+    if (options.mode === 'phone') {
+      try {
+        greetingAudio = await this.ttsProvider.synthesizeSpeech(greeting, {
+          voiceId: this.config.voiceId,
+          model: this.config.ttsModel,
+          format: { container: 'mulaw', sampleRate: 8000 },
+          latencyOptimized: true,
+        });
+      } catch (e: any) {
+        if (process.env.DEBUG_LOGGING === 'true') {
+          console.warn('[VoiceAgent] Could not synthesize greeting audio for phone:', e.message);
+        }
       }
     }
 
@@ -269,7 +271,7 @@ export class VoiceAgent {
 
       audioBuffer = await Promise.race([
         ttsPromise,
-        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 2500)),
+        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 4000)),
       ]);
     } catch (e: any) {
       if (process.env.DEBUG_LOGGING === 'true') {

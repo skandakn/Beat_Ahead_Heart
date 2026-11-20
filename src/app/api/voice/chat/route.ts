@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
     const utterancePromise = voiceAgent.handleCallerUtterance(callId, message);
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Voice turn timeout safeguard')), 5500)
+      setTimeout(() => reject(new Error('Voice turn timeout safeguard')), 7500)
     );
     const { responseText, audioBuffer, liveStructuredData, toolExecutions } =
       await Promise.race([utterancePromise, timeoutPromise]);

@@ -34,6 +34,9 @@ interface SymptomState {
   confidence?: number;
 }
 
+const DEFAULT_CARDIAC_GREETING =
+  "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?";
+
 export function CardiacVoiceWidget() {
   const { t } = useI18n();
   const pathname = usePathname();
@@ -61,6 +64,7 @@ export function CardiacVoiceWidget() {
   const isAudioPausedRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const lastAssistantTextRef = useRef<string>(DEFAULT_CARDIAC_GREETING);
   const lastAudioEndTimeRef = useRef<number>(0);
   const recentAssistantTextsRef = useRef<string[]>([
     'Hello, this is the BeatAhead Cardiac Care Helpline. I am here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?',
@@ -99,6 +103,18 @@ export function CardiacVoiceWidget() {
   };
 
   // Stop currently playing audio immediately (ElevenLabs + speechSynthesis)
+  // Immediate user-gesture audio unlock for mobile and autoplay-protected browsers
+  const unlockAudio = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.resume();
+      }
+      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
+      silentAudio.play().catch(() => {});
+    } catch {}
+  }, []);
+
   const stopCurrentAudio = useCallback(() => {
     audioQueueRef.current = [];
     if (currentAudioRef.current) {
@@ -188,7 +204,10 @@ export function CardiacVoiceWidget() {
   // Speak text via browser speechSynthesis (fallback when no ElevenLabs audio)
   const speakFallback = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.cancel();
+    } catch {}
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.95;
     utterance.pitch = 1;
@@ -306,7 +325,10 @@ export function CardiacVoiceWidget() {
     };
 
     audio.play().catch((err) => {
-      console.warn('Autoplay prevented:', err);
+      console.warn('Audio play error, falling back to speech synthesis:', err);
+      if (lastAssistantTextRef.current) {
+        speakFallback(lastAssistantTextRef.current);
+      }
       currentAudioRef.current = null;
       lastAudioEndTimeRef.current = Date.now();
       isAudioPausedRef.current = false;
@@ -342,6 +364,7 @@ export function CardiacVoiceWidget() {
       if (!cleanText || cleanText.length < 2) return;
 
       // Stop any lingering audio immediately upon user speaking
+      unlockAudio();
       stopCurrentAudio();
 
       // 0ms instant client-side deterministic symptom extraction
@@ -388,6 +411,7 @@ export function CardiacVoiceWidget() {
           // Track assistant text for future echo cancellation
           if (data.responseText) {
             recentAssistantTextsRef.current.push(data.responseText);
+            lastAssistantTextRef.current = data.responseText;
           }
 
           setTranscripts((prev) => [
@@ -627,13 +651,27 @@ export function CardiacVoiceWidget() {
   // Start call session
   const startCall = useCallback(async () => {
     try {
+      unlockAudio();
       stopCurrentAudio();
       const newCallId = `cardiac_browser_${Date.now()}`;
       callIdRef.current = newCallId;
       setCallId(newCallId);
       setIsConnected(true);
       isConnectedRef.current = true;
-      setStatusMessage('Connecting to Cardiac Care Specialist...');
+      setStatusMessage('Triage Line Connected • Listening');
+      setTranscripts((prev) => {
+        if (prev.length > 0) return prev;
+        return [
+          {
+            speaker: 'assistant',
+            text: DEFAULT_CARDIAC_GREETING,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ];
+      });
+      lastAssistantTextRef.current = DEFAULT_CARDIAC_GREETING;
+      speakFallback(DEFAULT_CARDIAC_GREETING);
+      startMicrophoneCapture(newCallId);
 
       const res = await fetch('/api/voice/chat', {
         method: 'POST',
@@ -723,6 +761,7 @@ export function CardiacVoiceWidget() {
       }
       setIsListening(false);
     } else {
+      unlockAudio();
       stopCurrentAudio();
       isPlayingRef.current = false;
       isAudioPausedRef.current = false;
@@ -773,7 +812,13 @@ export function CardiacVoiceWidget() {
       {!isOpen && (
         <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-40 flex items-center gap-3">
           <button
-            onClick={() => setIsOpen(true)}
+            onClick={() => {
+              unlockAudio();
+              setIsOpen(true);
+              if (!isConnectedRef.current) {
+                startCall();
+              }
+            }}
             aria-label="Open 24/7 Beat Ahead Assistant"
             className="group relative flex items-center gap-2.5 sm:gap-3 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-700 px-3.5 py-2.5 sm:px-5 sm:py-3.5 text-white shadow-2xl shadow-red-600/40 transition-all duration-300 hover:scale-105 hover:shadow-red-600/60 focus:outline-none focus:ring-4 focus:ring-red-500/30"
           >
