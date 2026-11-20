@@ -26,8 +26,8 @@ export class GeminiProvider implements LLMProvider {
 
   constructor(config?: GeminiProviderConfig) {
     this.apiKey = config?.apiKey || process.env.GEMINI_API_KEY || '';
-    // Default to gemini-flash-latest with high rate-limit ceiling and fast response
-    this.model = config?.model || process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    // Default to gemini-3.1-flash-lite with ultra-low latency and fast emergency response
+    this.model = config?.model || process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
     this.baseUrl = config?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
   }
 
@@ -36,10 +36,9 @@ export class GeminiProvider implements LLMProvider {
    */
   private async executeWithRetryAndFallback(requestBody: any): Promise<any> {
     const modelPool = [
-      'gemini-flash-latest',
-      'gemini-flash-lite-latest',
-      'gemini-3.1-flash-lite-preview',
+      'gemini-3.1-flash-lite',
       this.model,
+      'gemini-flash-latest',
     ].filter((m, idx, arr) => Boolean(m) && arr.indexOf(m) === idx);
 
     let lastError: any = null;
@@ -51,7 +50,7 @@ export class GeminiProvider implements LLMProvider {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(3500),
         });
 
         if (response.ok) {

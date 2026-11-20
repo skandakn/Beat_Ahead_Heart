@@ -243,17 +243,8 @@ export class VoiceAgent {
       this.activeConversations.set(callId, conversation);
     }
 
-    // Run conversational generation and extraction concurrently
-    const [conversationResult] = await Promise.all([
-      conversation.processCallerUtterance(trimmedText, session),
-      extractor
-        ? Promise.race([
-            extractor.flush(),
-            new Promise((resolve) => setTimeout(resolve, 2500)), // timeout safeguard
-          ])
-        : Promise.resolve(),
-    ]);
-
+    // Process conversational reply promptly without blocking on slow background extraction
+    const conversationResult = await conversation.processCallerUtterance(trimmedText, session);
     const { responseText, toolExecutions } = conversationResult;
 
     // Add assistant item to transcript
@@ -266,17 +257,24 @@ export class VoiceAgent {
     };
     this.sessionManager.addTranscriptItem(callId, assistantItem);
 
-    // 5. Synthesize speech
+    // 5. Synthesize speech with tight 2.5s safeguard timeout
     let audioBuffer: Buffer | undefined;
     try {
-      audioBuffer = await this.ttsProvider.synthesizeSpeech(responseText, {
+      const ttsPromise = this.ttsProvider.synthesizeSpeech(responseText, {
         voiceId: this.config.voiceId,
         model: this.config.ttsModel,
         format: session.mode === 'phone' ? { container: 'mulaw', sampleRate: 8000 } : { container: 'mp3', sampleRate: 44100 },
         latencyOptimized: true,
       });
+
+      audioBuffer = await Promise.race([
+        ttsPromise,
+        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 2500)),
+      ]);
     } catch (e: any) {
-      console.error('[VoiceAgent] TTS synthesis error:', e.message);
+      if (process.env.DEBUG_LOGGING === 'true') {
+        console.warn('[VoiceAgent] TTS synthesis error or timeout:', e.message);
+      }
     }
 
     const liveStructuredData = {
