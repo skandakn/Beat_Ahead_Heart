@@ -27,6 +27,8 @@ import { usePathname } from 'next/navigation';
 import { filterAcousticEcho } from '@/core/utils/echo-filter';
 import { extractCardiacFindings } from '@/core/extraction/deterministic-extractor';
 import { cn } from '@/lib/utils';
+import { unlockAudioContext, playVoiceAudio } from '@/lib/voice/audio-player';
+import { SpeechRecorder } from '@/lib/voice/speech-recorder';
 
 interface SymptomState {
   value: any;
@@ -46,6 +48,8 @@ export function CardiacVoiceWidget() {
   const [isAudioPaused, setIsAudioPaused] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [micAudioLevel, setMicAudioLevel] = useState(0);
   const [callId, setCallId] = useState<string>('');
   const callIdRef = useRef<string>('');
   const [callDuration, setCallDuration] = useState(0);
@@ -58,12 +62,11 @@ export function CardiacVoiceWidget() {
   const [urgencyBadge, setUrgencyBadge] = useState<string | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
 
-  // Audio & Echo Cancellation References
-  const audioQueueRef = useRef<string[]>([]);
+  // Audio & Speech References
+  const speechRecorderRef = useRef<SpeechRecorder | null>(null);
+  const cancelAudioRef = useRef<(() => void) | null>(null);
   const isPlayingRef = useRef(false);
   const isAudioPausedRef = useRef(false);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const speechUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const lastAssistantTextRef = useRef<string>(DEFAULT_CARDIAC_GREETING);
   const lastAudioEndTimeRef = useRef<number>(0);
   const recentAssistantTextsRef = useRef<string[]>([
@@ -71,9 +74,6 @@ export function CardiacVoiceWidget() {
     'BeatAhead Cardiac Care Helpline',
   ]);
   const isConnectedRef = useRef(false);
-  const recognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -102,247 +102,72 @@ export function CardiacVoiceWidget() {
     return `${m}:${s}`;
   };
 
-  // Stop currently playing audio immediately (ElevenLabs + speechSynthesis)
-  // Immediate user-gesture audio unlock for mobile and autoplay-protected browsers
   const unlockAudio = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.resume();
-      }
-      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
-      silentAudio.play().catch(() => {});
-    } catch {}
+    unlockAudioContext();
   }, []);
 
   const stopCurrentAudio = useCallback(() => {
-    audioQueueRef.current = [];
-    if (currentAudioRef.current) {
-      try {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-        currentAudioRef.current.onended = null;
-        currentAudioRef.current.onerror = null;
-      } catch {}
-      currentAudioRef.current = null;
+    if (cancelAudioRef.current) {
+      cancelAudioRef.current();
+      cancelAudioRef.current = null;
     }
-    // Also cancel any browser speechSynthesis in progress
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      try { window.speechSynthesis.cancel(); } catch {}
-    }
-    speechUtteranceRef.current = null;
     isPlayingRef.current = false;
     isAudioPausedRef.current = false;
     setIsSpeaking(false);
     setIsAudioPaused(false);
   }, []);
 
-
-  // Safely pause speech recognition
-  const safeAbortRecognition = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {}
-    }
-    setIsListening(false);
-  }, []);
-
-  // Safely resume speech recognition after audio ends
-  const safeStartRecognition = useCallback(() => {
-    if (!recognitionRef.current || !isConnectedRef.current || isPlayingRef.current) return;
-    try {
-      recognitionRef.current.start();
-      setIsListening(true);
-    } catch {
-      // Ignore if already active
-    }
-  }, []);
-
-  // Toggle audio pause / resume:
-  //   PAUSE  → audio pauses, isPlayingRef goes false, mic starts (user can speak)
-  //   RESUME → mic stops, isPlayingRef goes true, audio resumes
   const toggleAudioPause = useCallback(() => {
-    const audio = currentAudioRef.current;
-    if (audio) {
-      // ElevenLabs base64 audio path
-      if (isAudioPausedRef.current) {
-        // RESUME — stop mic, mark playing, resume audio
-        safeAbortRecognition();
-        isPlayingRef.current = true;
-        isAudioPausedRef.current = false;
-        setIsAudioPaused(false);
-        audio.play().catch(() => {});
-      } else {
-        // PAUSE — pause audio, free mic for user input
-        isAudioPausedRef.current = true;
-        isPlayingRef.current = false;
-        setIsAudioPaused(true);
-        audio.pause();
-        setTimeout(() => safeStartRecognition(), 150);
-      }
-    } else if (typeof window !== 'undefined' && window.speechSynthesis) {
-      // Browser speechSynthesis fallback path
-      if (isAudioPausedRef.current) {
-        // RESUME
-        safeAbortRecognition();
-        isPlayingRef.current = true;
-        isAudioPausedRef.current = false;
-        setIsAudioPaused(false);
-        window.speechSynthesis.resume();
-      } else if (window.speechSynthesis.speaking) {
-        // PAUSE
-        isAudioPausedRef.current = true;
-        isPlayingRef.current = false;
-        setIsAudioPaused(true);
-        window.speechSynthesis.pause();
-        setTimeout(() => safeStartRecognition(), 150);
-      }
+    stopCurrentAudio();
+    if (isConnectedRef.current) {
+      setTimeout(() => {
+        speechRecorderRef.current?.start();
+      }, 200);
     }
-  }, [safeAbortRecognition, safeStartRecognition]);
+  }, [stopCurrentAudio]);
 
-  // Speak text via browser speechSynthesis (fallback when no ElevenLabs audio)
-  const speakFallback = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    try {
-      window.speechSynthesis.resume();
-      window.speechSynthesis.cancel();
-    } catch {}
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    // Voices load asynchronously — wait for them if empty
-    const assignVoiceAndSpeak = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(
-        (v) => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Female'))
-      ) || voices.find((v) => v.lang.startsWith('en'));
-      if (preferred) utterance.voice = preferred;
+  const playAssistantAudio = useCallback(
+    (audioBase64: string | null | undefined, text: string) => {
+      stopCurrentAudio();
+      unlockAudioContext();
 
       isPlayingRef.current = true;
-      isAudioPausedRef.current = false;
       setIsSpeaking(true);
-      setIsAudioPaused(false);
-      safeAbortRecognition();
-      speechUtteranceRef.current = utterance;
+      // Temporarily pause speech recorder so it doesn't transcribe assistant's speaker output
+      speechRecorderRef.current?.stop();
 
-      // Watchdog timeout to prevent speech synthesis freeze from locking microphone
-      const watchdogDuration = Math.max(3500, text.length * 85);
-      const watchdog = setTimeout(() => {
-        if (speechUtteranceRef.current === utterance) {
-          console.log('[Widget Watchdog] Auto-clearing speech lock after timeout');
-          speechUtteranceRef.current = null;
+      const cancel = playVoiceAudio(audioBase64 || '', {
+        fallbackText: text,
+        onStarted: () => {
+          isPlayingRef.current = true;
+          setIsSpeaking(true);
+        },
+        onEnded: () => {
           isPlayingRef.current = false;
-          isAudioPausedRef.current = false;
           setIsSpeaking(false);
-          setIsAudioPaused(false);
           lastAudioEndTimeRef.current = Date.now();
-          safeStartRecognition();
-        }
-      }, watchdogDuration);
-
-      utterance.onend = () => {
-        clearTimeout(watchdog);
-        speechUtteranceRef.current = null;
-        isPlayingRef.current = false;
-        isAudioPausedRef.current = false;
-        setIsSpeaking(false);
-        setIsAudioPaused(false);
-        lastAudioEndTimeRef.current = Date.now();
-        setTimeout(() => {
-          if (!isPlayingRef.current && isConnectedRef.current) {
-            safeStartRecognition();
+          if (isConnectedRef.current) {
+            setTimeout(() => {
+              if (isConnectedRef.current && !isPlayingRef.current) {
+                speechRecorderRef.current?.start();
+              }
+            }, 400);
           }
-        }, 800);
-      };
-      utterance.onerror = () => {
-        clearTimeout(watchdog);
-        speechUtteranceRef.current = null;
-        isPlayingRef.current = false;
-        setIsSpeaking(false);
-        setIsAudioPaused(false);
-      };
-      window.speechSynthesis.speak(utterance);
-    };
+        },
+        onError: (err) => {
+          console.warn('[Widget] Audio playback error:', err);
+          isPlayingRef.current = false;
+          setIsSpeaking(false);
+          if (isConnectedRef.current) {
+            speechRecorderRef.current?.start();
+          }
+        },
+      });
 
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      assignVoiceAndSpeak();
-    } else {
-      // Voices not yet loaded — wait for the voiceschanged event
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.onvoiceschanged = null;
-        assignVoiceAndSpeak();
-      };
-      // Safety net: speak even if event never fires
-      setTimeout(assignVoiceAndSpeak, 500);
-    }
-  }, [safeAbortRecognition, safeStartRecognition]);
-
-  // Audio queue sequential playback with acoustic echo protection
-  const playNextAudio = useCallback(() => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsSpeaking(false);
-      setIsAudioPaused(false);
-      isAudioPausedRef.current = false;
-      lastAudioEndTimeRef.current = Date.now();
-
-      // Buffer 800ms after speaker audio stops before restarting speech recognition
-      setTimeout(() => {
-        if (!isPlayingRef.current && isConnectedRef.current) {
-          safeStartRecognition();
-        }
-      }, 800);
-      return;
-    }
-
-    isPlayingRef.current = true;
-    isAudioPausedRef.current = false;
-    setIsAudioPaused(false);
-    setIsSpeaking(true);
-    safeAbortRecognition(); // Abort microphone capture while speaker is playing!
-
-    const base64Audio = audioQueueRef.current.shift()!;
-    const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-    currentAudioRef.current = audio;
-
-    // Guard: only chain to next track if not user-paused
-    audio.onended = () => {
-      if (isAudioPausedRef.current) return; // user paused — don't advance queue
-      currentAudioRef.current = null;
-      lastAudioEndTimeRef.current = Date.now();
-      playNextAudio();
-    };
-
-    audio.onerror = (e) => {
-      console.warn('Audio playback error:', e);
-      currentAudioRef.current = null;
-      lastAudioEndTimeRef.current = Date.now();
-      isAudioPausedRef.current = false;
-      playNextAudio();
-    };
-
-    audio.play().catch((err) => {
-      console.warn('Audio play error, falling back to speech synthesis:', err);
-      if (lastAssistantTextRef.current) {
-        speakFallback(lastAssistantTextRef.current);
-      }
-      currentAudioRef.current = null;
-      lastAudioEndTimeRef.current = Date.now();
-      isAudioPausedRef.current = false;
-      playNextAudio();
-    });
-  }, [safeAbortRecognition, safeStartRecognition]);
-
-  const queueAudio = useCallback((base64Audio: string) => {
-    audioQueueRef.current.push(base64Audio);
-    // Don't trigger playback if already playing or if user has paused
-    if (!isPlayingRef.current && !isAudioPausedRef.current) {
-      playNextAudio();
-    }
-  }, [playNextAudio]);
+      cancelAudioRef.current = cancel;
+    },
+    [stopCurrentAudio]
+  );
 
   // Send turn to Voice Agent backend
   const sendPatientUtterance = useCallback(
@@ -364,7 +189,7 @@ export function CardiacVoiceWidget() {
       if (!cleanText || cleanText.length < 2) return;
 
       // Stop any lingering audio immediately upon user speaking
-      unlockAudio();
+      unlockAudioContext();
       stopCurrentAudio();
 
       // 0ms instant client-side deterministic symptom extraction
@@ -408,7 +233,6 @@ export function CardiacVoiceWidget() {
         if (data.success) {
           setStatusMessage('Triage Line Connected • Active');
 
-          // Track assistant text for future echo cancellation
           if (data.responseText) {
             recentAssistantTextsRef.current.push(data.responseText);
             lastAssistantTextRef.current = data.responseText;
@@ -423,12 +247,7 @@ export function CardiacVoiceWidget() {
             },
           ]);
 
-          if (data.audioBase64) {
-            queueAudio(data.audioBase64);
-          } else if (data.responseText) {
-            // No ElevenLabs audio — fall back to browser speechSynthesis
-            speakFallback(data.responseText);
-          }
+          playAssistantAudio(data.audioBase64, data.responseText);
 
           if (data.structuredData) {
             setExtractedData((prev) => ({
@@ -450,208 +269,13 @@ export function CardiacVoiceWidget() {
         setStatusMessage('Error processing turn: ' + err.message);
       }
     },
-    [callId, extractedData, queueAudio, speakFallback, stopCurrentAudio]
+    [callId, extractedData, playAssistantAudio, stopCurrentAudio]
   );
-
-  // MediaRecorder Fallback using Groq Whisper
-  const startMediaRecorderCapture = useCallback(
-    (activeCallId: string) => {
-      if (typeof window === 'undefined') return;
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setMicError('Microphone is not supported in this browser.');
-        setStatusMessage('Microphone unavailable. Use text box.');
-        setIsListening(false);
-        return;
-      }
-
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-          mediaRecorderRef.current = recorder;
-          setIsListening(true);
-          setMicError(null);
-
-          recorder.ondataavailable = (e) => {
-            if (e.data.size > 0 && !isPlayingRef.current) {
-              audioChunksRef.current.push(e.data);
-            }
-          };
-
-          recorder.onstop = async () => {
-            stream.getTracks().forEach((track) => track.stop());
-            if (audioChunksRef.current.length > 0 && !isPlayingRef.current) {
-              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-              audioChunksRef.current = [];
-              try {
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'audio.webm');
-                const res = await fetch('/api/voice/transcribe', {
-                  method: 'POST',
-                  body: formData,
-                });
-                const d = await res.json();
-                if (d.text && d.text.trim().length > 0) {
-                  sendPatientUtterance(d.text.trim(), activeCallId);
-                }
-              } catch (err) {
-                console.warn('Groq Whisper transcribe failed:', err);
-              }
-            }
-          };
-
-          recorder.start(2500);
-        })
-        .catch((err) => {
-          console.warn('MediaRecorder error:', err);
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            setMicError('Microphone permission blocked. Please allow microphone in your browser address bar.');
-            setStatusMessage('⚠️ Microphone blocked. Allow in address bar.');
-          } else {
-            setMicError('Microphone unavailable. Please type your message.');
-            setStatusMessage('Microphone unavailable. Use text box.');
-          }
-          setIsListening(false);
-        });
-    },
-    [sendPatientUtterance]
-  );
-
-  // Microphone capture setup
-  const startMicrophoneCapture = useCallback(
-    (activeCallId: string) => {
-      if (typeof window === 'undefined') return;
-
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-      if (SpeechRecognition) {
-        try {
-          const recognition = new SpeechRecognition();
-          recognition.continuous = true;
-          recognition.interimResults = false;
-          recognition.lang = 'en-US';
-
-          recognition.onstart = () => {
-            if (!isPlayingRef.current) {
-              setIsListening(true);
-            }
-          };
-
-          recognition.onresult = (event: any) => {
-            // Guard: strictly ignore if audio is playing or ended within 800ms
-            if (isPlayingRef.current || Date.now() - lastAudioEndTimeRef.current < 800) {
-              console.log('[Widget] Discarded speech during speaker audio playback');
-              return;
-            }
-
-            const lastResult = event.results[event.results.length - 1];
-            if (lastResult.isFinal) {
-              const rawText = lastResult[0].transcript.trim();
-              if (rawText.length > 0) {
-                sendPatientUtterance(rawText, activeCallId);
-              }
-            }
-          };
-
-          recognition.onerror = (e: any) => {
-            console.warn('Speech recognition warning:', e.error);
-            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-              setMicError('Microphone permission blocked. Please allow microphone in your browser URL bar.');
-              setStatusMessage('⚠️ Microphone blocked. Allow in address bar.');
-              setIsListening(false);
-            } else if (e.error === 'network') {
-              startMediaRecorderCapture(activeCallId);
-            } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
-              console.warn('Speech recognition warning:', e.error);
-            }
-          };
-
-          recognition.onend = () => {
-            if (isConnectedRef.current && !isPlayingRef.current && Date.now() - lastAudioEndTimeRef.current >= 800) {
-              setTimeout(() => {
-                if (isConnectedRef.current && !isPlayingRef.current && Date.now() - lastAudioEndTimeRef.current >= 800) {
-                  try {
-                    recognition.start();
-                  } catch {}
-                }
-              }, 400);
-            }
-          };
-
-          // Only start microphone capture immediately if speaker audio is NOT playing
-          if (!isPlayingRef.current && Date.now() - lastAudioEndTimeRef.current >= 800) {
-            try {
-              recognition.start();
-            } catch {}
-          }
-          recognitionRef.current = recognition;
-          return;
-        } catch (e) {
-          console.warn('Web Speech API fallback to MediaRecorder', e);
-        }
-      }
-
-      // MediaRecorder fallback
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices
-          .getUserMedia({ audio: true })
-          .then((stream) => {
-            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            mediaRecorderRef.current = recorder;
-            setIsListening(true);
-
-            recorder.ondataavailable = async (e) => {
-              if (e.data.size > 0 && !isPlayingRef.current) {
-                audioChunksRef.current.push(e.data);
-              }
-            };
-
-            recorder.onstop = async () => {
-              if (audioChunksRef.current.length > 0 && !isPlayingRef.current) {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                audioChunksRef.current = [];
-                try {
-                  const formData = new FormData();
-                  formData.append('file', audioBlob, 'audio.webm');
-                  const res = await fetch('/api/voice/transcribe', {
-                    method: 'POST',
-                    body: formData,
-                  });
-                  const d = await res.json();
-                  if (d.text && d.text.trim().length > 0) {
-                    sendPatientUtterance(d.text.trim(), activeCallId);
-                  }
-                } catch {}
-              }
-            };
-
-            recorder.start(2500);
-          })
-          .catch(() => {
-            setStatusMessage('Microphone unavailable. Use text box below.');
-          });
-      }
-    },
-    [sendPatientUtterance, startMediaRecorderCapture]
-  );
-
-  const stopMicrophoneCapture = useCallback(() => {
-    safeAbortRecognition();
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-      } catch {}
-      mediaRecorderRef.current = null;
-    }
-    setIsListening(false);
-  }, [safeAbortRecognition]);
 
   // Start call session
   const startCall = useCallback(async () => {
     try {
-      unlockAudio();
+      unlockAudioContext();
       stopCurrentAudio();
       const newCallId = `cardiac_browser_${Date.now()}`;
       callIdRef.current = newCallId;
@@ -659,6 +283,7 @@ export function CardiacVoiceWidget() {
       setIsConnected(true);
       isConnectedRef.current = true;
       setStatusMessage('Triage Line Connected • Listening');
+
       setTranscripts((prev) => {
         if (prev.length > 0) return prev;
         return [
@@ -669,11 +294,34 @@ export function CardiacVoiceWidget() {
           },
         ];
       });
-      lastAssistantTextRef.current = DEFAULT_CARDIAC_GREETING;
-      speakFallback(DEFAULT_CARDIAC_GREETING);
-      startMicrophoneCapture(newCallId);
 
-      const res = await fetch('/api/voice/chat', {
+      lastAssistantTextRef.current = DEFAULT_CARDIAC_GREETING;
+      playAssistantAudio(null, DEFAULT_CARDIAC_GREETING);
+
+      if (!speechRecorderRef.current) {
+        speechRecorderRef.current = new SpeechRecorder({
+          onTranscript: (userText) => {
+            sendPatientUtterance(userText, newCallId);
+          },
+          onListeningChange: (listening) => {
+            setIsListening(listening);
+          },
+          onTranscribingChange: (transcribing) => {
+            setIsTranscribing(transcribing);
+            if (transcribing) {
+              setStatusMessage('Transcribing speech with Groq Whisper...');
+            }
+          },
+          onError: (err) => {
+            setMicError(err);
+          },
+          onAudioLevel: (lvl) => {
+            setMicAudioLevel(lvl);
+          },
+        });
+      }
+
+      fetch('/api/voice/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -681,51 +329,21 @@ export function CardiacVoiceWidget() {
           callId: newCallId,
           callerId: 'Patient (Browser Session)',
         }),
-      });
+      }).catch(() => {});
 
-      const data = await res.json();
-      if (data.success) {
-        setStatusMessage('Triage Line Connected • Listening');
-        const greeting =
-          data.responseText ||
-          "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?";
-
-        recentAssistantTextsRef.current.push(greeting);
-        recentAssistantTextsRef.current.push(
-          "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?"
-        );
-        recentAssistantTextsRef.current.push(
-          "Hello, this is the Beta Head Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?"
-        );
-
-        setTranscripts([
-          {
-            speaker: 'assistant',
-            text: greeting,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
-
-        if (data.audioBase64) {
-          queueAudio(data.audioBase64);
-        } else if (greeting) {
-          // No ElevenLabs audio — fall back to browser speechSynthesis
-          speakFallback(greeting);
-        }
-
-        startMicrophoneCapture(newCallId);
-        return newCallId;
-      }
+      return newCallId;
     } catch (err: any) {
       console.error('Failed to start call:', err);
       setStatusMessage('Connection failed: ' + err.message);
     }
-  }, [queueAudio, speakFallback, startMicrophoneCapture, stopCurrentAudio]);
+  }, [playAssistantAudio, sendPatientUtterance, stopCurrentAudio]);
 
   // End call session
   const endCall = useCallback(async () => {
     stopCurrentAudio();
-    stopMicrophoneCapture();
+    if (speechRecorderRef.current) {
+      speechRecorderRef.current.stop();
+    }
     if (callId) {
       try {
         await fetch('/api/voice/chat', {
@@ -742,44 +360,47 @@ export function CardiacVoiceWidget() {
     setIsListening(false);
     setIsSpeaking(false);
     setStatusMessage('Call finalized • Summary archived');
-  }, [callId, stopCurrentAudio, stopMicrophoneCapture]);
+  }, [callId, stopCurrentAudio]);
 
   // Manual toggle to start/pause microphone
   const toggleMicrophone = useCallback(async () => {
     setMicError(null);
+    unlockAudioContext();
+
     if (!isConnectedRef.current) {
       await startCall();
       return;
     }
 
     if (isListening) {
-      safeAbortRecognition();
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        try {
-          mediaRecorderRef.current.stop();
-        } catch {}
+      if (speechRecorderRef.current) {
+        speechRecorderRef.current.submitRecording();
       }
       setIsListening(false);
     } else {
-      unlockAudio();
       stopCurrentAudio();
-      isPlayingRef.current = false;
-      isAudioPausedRef.current = false;
-      setIsSpeaking(false);
-      safeStartRecognition();
-      if (!recognitionRef.current) {
-        startMicrophoneCapture(callId);
+      if (!speechRecorderRef.current) {
+        speechRecorderRef.current = new SpeechRecorder({
+          onTranscript: (userText) => {
+            sendPatientUtterance(userText);
+          },
+          onListeningChange: (listening) => {
+            setIsListening(listening);
+          },
+          onTranscribingChange: (transcribing) => {
+            setIsTranscribing(transcribing);
+          },
+          onError: (err) => {
+            setMicError(err);
+          },
+          onAudioLevel: (lvl) => {
+            setMicAudioLevel(lvl);
+          },
+        });
       }
+      speechRecorderRef.current.start();
     }
-  }, [
-    isListening,
-    startCall,
-    safeAbortRecognition,
-    stopCurrentAudio,
-    safeStartRecognition,
-    startMicrophoneCapture,
-    callId,
-  ]);
+  }, [isListening, sendPatientUtterance, startCall, stopCurrentAudio]);
 
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1023,11 +644,20 @@ export function CardiacVoiceWidget() {
               <div className="flex items-center gap-2">
                 {isSpeaking ? (
                   <span className="flex items-center gap-1.5 text-emerald-400 font-semibold animate-pulse">
-                    <Volume2 className="h-3.5 w-3.5" /> Speaking (ElevenLabs)
+                    <Volume2 className="h-3.5 w-3.5" /> Speaking (Voice Output Active)
+                  </span>
+                ) : isTranscribing ? (
+                  <span className="flex items-center gap-1.5 text-sky-400 font-semibold animate-pulse">
+                    <Sparkles className="h-3.5 w-3.5 animate-spin" /> Transcribing with Groq Whisper...
                   </span>
                 ) : isListening ? (
                   <span className="flex items-center gap-1.5 text-amber-400 font-semibold">
-                    <Mic className="h-3.5 w-3.5 animate-pulse" /> Listening (Microphone)
+                    <Mic className="h-3.5 w-3.5 animate-pulse text-red-400" />
+                    <span>Listening... {micAudioLevel > 0.05 ? '(Voice detected)' : '(Speak now)'}</span>
+                  </span>
+                ) : isThinking ? (
+                  <span className="flex items-center gap-1.5 text-blue-400 font-semibold animate-pulse">
+                    <HeartPulse className="h-3.5 w-3.5 animate-bounce" /> Clinical Triage Brain thinking...
                   </span>
                 ) : (
                   <span className="text-slate-400 flex items-center gap-1">
@@ -1071,20 +701,24 @@ export function CardiacVoiceWidget() {
                 "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all shadow-xs border",
                 isListening
                   ? "bg-red-600 text-white border-red-500 animate-pulse ring-2 ring-red-400"
+                  : isTranscribing
+                  ? "bg-sky-600 text-white border-sky-500 animate-pulse"
                   : isConnected
                   ? "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white"
                   : "bg-red-600/20 text-red-400 border-red-500/30 hover:bg-red-600 hover:text-white"
               )}
               title={
                 isListening
-                  ? "Microphone is listening (click to pause)"
+                  ? "Microphone is recording (click to send speech now)"
                   : isConnected
-                  ? "Click to talk (Microphone)"
-                  : "Click to start live voice conversation"
+                  ? "Click to speak into microphone"
+                  : "Click to start live voice triage"
               }
             >
               {isListening ? (
                 <Mic className="h-4 w-4 text-white animate-pulse" />
+              ) : isTranscribing ? (
+                <Sparkles className="h-4 w-4 text-white animate-spin" />
               ) : (
                 <Mic className="h-4 w-4" />
               )}
@@ -1094,15 +728,17 @@ export function CardiacVoiceWidget() {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={
-                isConnected
-                  ? (isListening ? '🎙️ Listening... speak now' : 'Speak into microphone or type symptoms...')
-                  : (isListening ? '🎙️ Listening... speak now' : 'Click 🎙️ to talk or type symptoms...')
+                isTranscribing
+                  ? 'Transcribing your speech with Groq Whisper...'
+                  : isListening
+                  ? '🎙️ Listening... speak now or click 🎙️ to send'
+                  : 'Speak into microphone or type symptoms...'
               }
               className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
             <button
               type="submit"
-              disabled={!textInput.trim()}
+              disabled={!textInput.trim() || isThinking}
               className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-600 text-white hover:bg-red-500 disabled:opacity-40 disabled:hover:bg-red-600 transition-all"
             >
               <Send className="h-3.5 w-3.5" />

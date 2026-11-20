@@ -26,6 +26,8 @@ import Link from 'next/link';
 import { filterAcousticEcho } from '@/core/utils/echo-filter';
 import { extractCardiacFindings } from '@/core/extraction/deterministic-extractor';
 import { cn } from '@/lib/utils';
+import { unlockAudioContext, playVoiceAudio } from '@/lib/voice/audio-player';
+import { SpeechRecorder } from '@/lib/voice/speech-recorder';
 
 export default function HelplinePage() {
   const [isConnected, setIsConnected] = useState(false);
@@ -40,18 +42,15 @@ export default function HelplinePage() {
   const [extractedData, setExtractedData] = useState<Record<string, any>>({});
   const [inputMessage, setInputMessage] = useState('');
 
-  const audioQueueRef = useRef<string[]>([]);
+  const speechRecorderRef = useRef<SpeechRecorder | null>(null);
+  const cancelAudioRef = useRef<(() => void) | null>(null);
   const isPlayingRef = useRef(false);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAudioEndTimeRef = useRef<number>(0);
   const recentAssistantTextsRef = useRef<string[]>([
     'Hello, this is the BeatAhead Cardiac Care Helpline. I am here with you.',
   ]);
   const isConnectedRef = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     isConnectedRef.current = isConnected;
@@ -64,90 +63,85 @@ export default function HelplinePage() {
   };
 
   const stopCurrentAudio = () => {
-    audioQueueRef.current = [];
-    if (currentAudioRef.current) {
-      try {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-        currentAudioRef.current.onended = null;
-        currentAudioRef.current.onerror = null;
-      } catch {}
-      currentAudioRef.current = null;
+    if (cancelAudioRef.current) {
+      cancelAudioRef.current();
+      cancelAudioRef.current = null;
     }
     isPlayingRef.current = false;
     setIsSpeaking(false);
   };
 
-  const safeAbortRecognition = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {}
-    }
-    setIsListening(false);
-  };
-
-  const safeStartRecognition = () => {
-    if (!recognitionRef.current || !isConnectedRef.current || isPlayingRef.current) return;
-    try {
-      recognitionRef.current.start();
-      setIsListening(true);
-    } catch {}
-  };
-
-  const playNextAudio = () => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsSpeaking(false);
-      lastAudioEndTimeRef.current = Date.now();
-      setTimeout(() => {
-        if (!isPlayingRef.current && isConnectedRef.current) {
-          safeStartRecognition();
-        }
-      }, 800);
-      return;
-    }
+  const playAssistantAudio = (audioBase64: string | null | undefined, text: string) => {
+    stopCurrentAudio();
+    unlockAudioContext();
 
     isPlayingRef.current = true;
     setIsSpeaking(true);
-    safeAbortRecognition();
+    speechRecorderRef.current?.stop();
 
-    const base64Audio = audioQueueRef.current.shift()!;
-    const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-    currentAudioRef.current = audio;
-
-    audio.onended = () => {
-      currentAudioRef.current = null;
-      lastAudioEndTimeRef.current = Date.now();
-      playNextAudio();
-    };
-    audio.onerror = () => {
-      currentAudioRef.current = null;
-      lastAudioEndTimeRef.current = Date.now();
-      playNextAudio();
-    };
-    audio.play().catch(() => {
-      currentAudioRef.current = null;
-      lastAudioEndTimeRef.current = Date.now();
-      playNextAudio();
+    const cancel = playVoiceAudio(audioBase64 || '', {
+      fallbackText: text,
+      onStarted: () => {
+        isPlayingRef.current = true;
+        setIsSpeaking(true);
+      },
+      onEnded: () => {
+        isPlayingRef.current = false;
+        setIsSpeaking(false);
+        lastAudioEndTimeRef.current = Date.now();
+        if (isConnectedRef.current) {
+          setTimeout(() => {
+            if (isConnectedRef.current && !isPlayingRef.current) {
+              speechRecorderRef.current?.start();
+            }
+          }, 400);
+        }
+      },
+      onError: () => {
+        isPlayingRef.current = false;
+        setIsSpeaking(false);
+        if (isConnectedRef.current) {
+          speechRecorderRef.current?.start();
+        }
+      },
     });
-  };
 
-  const queueAudio = (base64: string) => {
-    audioQueueRef.current.push(base64);
-    if (!isPlayingRef.current) {
-      playNextAudio();
-    }
+    cancelAudioRef.current = cancel;
   };
 
   // Start voice session
   const startSession = async () => {
     try {
+      unlockAudioContext();
+      stopCurrentAudio();
       const newCallId = `browser_helpline_${Date.now()}`;
       setCallId(newCallId);
       setIsConnected(true);
 
-      const res = await fetch('/api/voice/chat', {
+      const DEFAULT_GREETING = "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?";
+
+      setTranscripts([
+        {
+          speaker: 'assistant',
+          text: DEFAULT_GREETING,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+
+      playAssistantAudio(null, DEFAULT_GREETING);
+
+      if (!speechRecorderRef.current) {
+        speechRecorderRef.current = new SpeechRecorder({
+          onTranscript: (userText) => {
+            handleSendUtterance(userText, newCallId);
+          },
+          onListeningChange: (listening) => {
+            setIsListening(listening);
+          },
+        });
+      }
+
+      fetch('/api/voice/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -155,36 +149,7 @@ export default function HelplinePage() {
           callId: newCallId,
           callerId: 'Patient (Emergency Triage)',
         }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        const greeting =
-          data.responseText ||
-          "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?";
-
-        recentAssistantTextsRef.current.push(greeting);
-        recentAssistantTextsRef.current.push(
-          "Hello, this is the BeatAhead Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?"
-        );
-        recentAssistantTextsRef.current.push(
-          "Hello, this is the Beta Head Cardiac Care Helpline. I'm here with you. Are you or someone near you experiencing chest discomfort, breathlessness, or unusual heart symptoms?"
-        );
-
-        setTranscripts([
-          {
-            speaker: 'assistant',
-            text: greeting,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
-
-        if (data.audioBase64) {
-          queueAudio(data.audioBase64);
-        }
-
-        startSpeechRecognition(newCallId);
-      }
+      }).catch(() => {});
     } catch (e: any) {
       console.error('Failed to start helpline session:', e);
     }
@@ -192,7 +157,9 @@ export default function HelplinePage() {
 
   const endSession = async () => {
     stopCurrentAudio();
-    stopSpeechRecognition();
+    if (speechRecorderRef.current) {
+      speechRecorderRef.current.stop();
+    }
     if (callId) {
       try {
         await fetch('/api/voice/chat', {
@@ -205,108 +172,6 @@ export default function HelplinePage() {
     setIsConnected(false);
     setIsListening(false);
     setIsSpeaking(false);
-  };
-
-  const startSpeechRecognition = (activeCallId: string) => {
-    if (typeof window === 'undefined') return;
-
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-
-        recognition.onstart = () => {
-          if (!isPlayingRef.current) setIsListening(true);
-        };
-        recognition.onresult = (e: any) => {
-          if (isPlayingRef.current || Date.now() - lastAudioEndTimeRef.current < 800) {
-            return;
-          }
-          const last = e.results[e.results.length - 1];
-          if (last.isFinal) {
-            const text = last[0].transcript.trim();
-            if (text) {
-              handleSendUtterance(text, activeCallId);
-            }
-          }
-        };
-        recognition.onend = () => {
-          if (isConnectedRef.current && !isPlayingRef.current && Date.now() - lastAudioEndTimeRef.current >= 800) {
-            setTimeout(() => {
-              if (isConnectedRef.current && !isPlayingRef.current && Date.now() - lastAudioEndTimeRef.current >= 800) {
-                try {
-                  recognition.start();
-                } catch {}
-              }
-            }, 400);
-          }
-        };
-
-        if (!isPlayingRef.current && Date.now() - lastAudioEndTimeRef.current >= 800) {
-          try {
-            recognition.start();
-          } catch {}
-        }
-        recognitionRef.current = recognition;
-        return;
-      } catch (err) {}
-    }
-
-    // Fallback MediaRecorder
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-          mediaRecorderRef.current = recorder;
-          setIsListening(true);
-
-          recorder.ondataavailable = async (e) => {
-            if (e.data.size > 0 && !isPlayingRef.current) {
-              audioChunksRef.current.push(e.data);
-            }
-          };
-
-          recorder.onstop = async () => {
-            if (audioChunksRef.current.length > 0 && !isPlayingRef.current) {
-              const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-              audioChunksRef.current = [];
-              const formData = new FormData();
-              formData.append('file', blob, 'audio.webm');
-              try {
-                const res = await fetch('/api/voice/transcribe', {
-                  method: 'POST',
-                  body: formData,
-                });
-                const d = await res.json();
-                if (d.text) {
-                  handleSendUtterance(d.text.trim(), activeCallId);
-                }
-              } catch {}
-            }
-          };
-
-          recorder.start(3000);
-        })
-        .catch(() => {});
-    }
-  };
-
-  const stopSpeechRecognition = () => {
-    safeAbortRecognition();
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
-      } catch {}
-      mediaRecorderRef.current = null;
-    }
-    setIsListening(false);
   };
 
   const handleSendUtterance = async (text: string, currentCallId = callId) => {
@@ -370,9 +235,7 @@ export default function HelplinePage() {
           },
         ]);
 
-        if (data.audioBase64) {
-          queueAudio(data.audioBase64);
-        }
+        playAssistantAudio(data.audioBase64, data.responseText);
 
         if (data.structuredData) {
           setExtractedData(data.structuredData);
@@ -548,13 +411,19 @@ export default function HelplinePage() {
                 <button
                   type="button"
                   onClick={() => {
+                    unlockAudioContext();
                     if (!isConnected) {
                       startSession();
                     } else if (isListening) {
-                      safeAbortRecognition();
+                      if (speechRecorderRef.current) {
+                        speechRecorderRef.current.submitRecording();
+                      }
+                      setIsListening(false);
                     } else {
                       stopCurrentAudio();
-                      safeStartRecognition();
+                      if (speechRecorderRef.current) {
+                        speechRecorderRef.current.start();
+                      }
                     }
                   }}
                   className={cn(
