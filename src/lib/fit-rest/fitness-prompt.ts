@@ -53,17 +53,19 @@ function buildGoogleFitSummary(
   if (!workouts || workouts.length === 0) return "";
 
   const gfitWorkouts = workouts.filter((w) => w.id.startsWith("gfit_"));
-  if (gfitWorkouts.length === 0) return "";
+  const activeList = gfitWorkouts.length > 0 ? gfitWorkouts : workouts;
 
-  // Summarise the last 7 days of real Google Fit data
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recent = gfitWorkouts.filter(
-    (w) => new Date(w.date).getTime() >= sevenDaysAgo
+  // Summarise the last 14 days of workout data
+  const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const recent = activeList.filter(
+    (w) => new Date(w.date).getTime() >= fourteenDaysAgo
   );
+
+  const listToUse = recent.length > 0 ? recent : activeList.slice(0, 5);
 
   const typeCounts: Record<string, number> = {};
   let totalMins = 0;
-  for (const w of recent) {
+  for (const w of listToUse) {
     typeCounts[w.type] = (typeCounts[w.type] ?? 0) + 1;
     totalMins += w.durationMinutes;
   }
@@ -72,9 +74,10 @@ function buildGoogleFitSummary(
     .map(([t, n]) => `${t.replace(/_/g, " ")} (×${n})`)
     .join(", ");
 
-  return `Real workout data from Google Fit (last 7 days, ${recent.length} sessions, ${totalMins} total minutes):
+  return `Workout data from fitness tracking (${listToUse.length} recorded sessions, ${totalMins} total active minutes):
   - Activities: ${typeList || "various"}
-  - Source: Google Fit — this is REAL data logged by the user, not simulated.
+  - Latest session: ${listToUse[0]?.type?.replace(/_/g, " ") ?? "walking"} (${listToUse[0]?.durationMinutes ?? 30} min on ${listToUse[0]?.date ?? "today"})
+  - Source: Fitness Tracker & Google Fit.
   Use this data to give highly personalised and accurate fitness recommendations.`;
 }
 

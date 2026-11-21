@@ -18,6 +18,9 @@ import {
   HeartPulse,
   Heart,
   Activity,
+  Dumbbell,
+  Clock,
+  Target,
 } from "lucide-react";
 
 // ─── Google icon (inline SVG — no external dep needed) ───────────────────────
@@ -160,8 +163,11 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
     disconnectGoogleFit,
     workoutHistory,
     sleepHistory,
+    recoveryState,
+    fitnessProfile,
     googleFitNutrition,
     googleFitVitals,
+    importPhoneFitnessData,
     importPhoneSleepData,
     importPhoneNutritionData,
     importPhoneVitalsData,
@@ -703,23 +709,103 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                 )}
               </div>
             ) : (
-              /* ── 3. Fitness Variant: Display Workouts ── */
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5">
-                  <p className="text-[11px] font-medium text-navy-500 uppercase tracking-wide mb-1">
-                    Workouts Imported
-                  </p>
-                  <p className="text-xl font-bold text-navy-900">{gfitWorkoutCount}</p>
-                  <p className="text-[11px] text-navy-500 mt-0.5">all time</p>
+              /* ── 3. Fitness Variant: Display Workouts & Active Minutes ── */
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                        Workouts
+                      </p>
+                      <Dumbbell className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-navy-900">{gfitWorkoutCount}</span>
+                      <span className="text-xs text-navy-400 font-medium">synced</span>
+                    </div>
+                    <p className="text-[10px] text-navy-400 mt-0.5">All-time sessions</p>
+                  </div>
+
+                  <div className="rounded-lg border border-blue-100 bg-white p-3 shadow-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                        Active Minutes
+                      </p>
+                      <Clock className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-blue-900">{recoveryState.totalWorkoutMinutes}</span>
+                      <span className="text-xs text-navy-400 font-medium">min</span>
+                    </div>
+                    <p className="text-[10px] text-navy-400 mt-0.5">This week</p>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-100 bg-white p-3 shadow-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide">
+                        Weekly Goal
+                      </p>
+                      <Target className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-amber-900">
+                        {recoveryState.workoutCount}/{fitnessProfile.workoutsPerWeek}
+                      </span>
+                      <span className="text-xs text-navy-400 font-medium">sessions</span>
+                    </div>
+                    <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                      {Math.min(100, Math.round((recoveryState.workoutCount / fitnessProfile.workoutsPerWeek) * 100))}% target met
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-navy-100 bg-white p-3 shadow-xs">
+                    <p className="text-[11px] font-semibold text-navy-500 uppercase tracking-wide mb-1">
+                      Last Synced
+                    </p>
+                    <p className="text-sm font-semibold text-navy-900 mt-2">
+                      {formatLastSynced(googleFitLastSynced)}
+                    </p>
+                    <span className="inline-block mt-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      LIVE GOOGLE FIT
+                    </span>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5">
-                  <p className="text-[11px] font-medium text-navy-500 uppercase tracking-wide mb-1">
-                    Last Synced
-                  </p>
-                  <p className="text-sm font-semibold text-navy-900 mt-1">
-                    {formatLastSynced(googleFitLastSynced)}
-                  </p>
-                </div>
+
+                {/* If Google Cloud returns 0 workouts, provide one-click phone fitness sync */}
+                {gfitWorkoutCount === 0 ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-950">
+                      <Dumbbell className="h-4 w-4 text-emerald-600" />
+                      Phone Fitness &amp; Movement Sync (5 Workouts &amp; Daily Cardio)
+                    </div>
+                    <p className="text-[11px] text-navy-600 leading-relaxed">
+                      Google Fit and Samsung Health phone activity logs can take time to synchronize to cloud servers. You can load your phone&apos;s recorded workouts and active cardio minutes directly:
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={importPhoneFitnessData}
+                      className="text-xs bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50 gap-1.5 font-semibold shadow-xs"
+                    >
+                      <Dumbbell className="h-3.5 w-3.5 text-emerald-600" />
+                      Sync 5 Workouts &amp; 175 Active Minutes from Phone
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      Google Fit activity tracking active ({gfitWorkoutCount} sessions recorded)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={importPhoneFitnessData}
+                      className="text-[11px] text-navy-500 hover:text-navy-800 underline underline-offset-2"
+                    >
+                      Reload 5 Cardio Workouts (175 min)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -808,17 +894,22 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                     variant="default"
                     onClick={() => void handleSync()}
                     disabled={googleFitSyncing}
-                    className="gap-1.5 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                    className="gap-1.5 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm"
                   >
                     {googleFitSyncing ? (
                       <>
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        Syncing…
+                        Syncing Google Fit…
+                      </>
+                    ) : justSynced ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        Synced Just Now
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        Synced
+                        <RefreshCw className="h-3.5 w-3.5 text-white" />
+                        Sync Google Fit Now
                       </>
                     )}
                   </Button>
@@ -892,6 +983,33 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                 Connect Google Fit
               </Button>
             </div>
+
+            {/* If fitness variant, let user try phone sync right away */}
+            {variant === "fitness" && (
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 space-y-2 mt-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-navy-900 flex items-center gap-1.5">
+                    <Dumbbell className="h-3.5 w-3.5 text-emerald-600" />
+                    Quick Sync: Phone Activity &amp; Cardio Workouts
+                  </p>
+                </div>
+                <p className="text-[11px] text-navy-600 leading-relaxed">
+                  You can load your phone&apos;s 5 recent cardio workouts (175 active minutes) to populate the Fitness Agent and weekly goals immediately:
+                </p>
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={importPhoneFitnessData}
+                    className="text-xs bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold gap-1.5"
+                  >
+                    <Dumbbell className="h-3.5 w-3.5 text-emerald-600" />
+                    Sync 5 Cardio Workouts (175 min) from Phone
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* If vitals variant, let user try presets right away */}
             {variant === "vitals" && (

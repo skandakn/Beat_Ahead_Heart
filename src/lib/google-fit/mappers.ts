@@ -266,13 +266,10 @@ export async function fetchAndMapSteps(
     return sessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
-  // Step 2b: use aggregate API for delta sources (or generic fallback)
-  const aggregateBy = stepSourceId
+  // Step 2b: use aggregate API with clean single data-source requests (avoid duplicate dataTypeName error)
+  const primarySource = stepSourceId
     ? [{ dataTypeName: stepDataType, dataSourceId: stepSourceId }]
-    : [
-        { dataTypeName: "com.google.step_count.delta", dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps" },
-        { dataTypeName: "com.google.step_count.delta" }
-      ];
+    : [{ dataTypeName: "com.google.step_count.delta", dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps" }];
 
   const stepStart = Math.max(startMs, endMs - 60 * 86400000);
 
@@ -282,7 +279,7 @@ export async function fetchAndMapSteps(
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        aggregateBy,
+        aggregateBy: primarySource,
         bucketByTime: { durationMillis: "86400000" },
         startTimeMillis: String(stepStart),
         endTimeMillis: String(endMs),
@@ -291,7 +288,25 @@ export async function fetchAndMapSteps(
     }
   );
 
-  // If specific source failed, retry without specifying a source
+  // If specific source failed, try merge_step_deltas
+  if (!aggRes.ok) {
+    aggRes = await fetch(
+      "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          aggregateBy: [{ dataTypeName: "com.google.step_count.delta", dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas" }],
+          bucketByTime: { durationMillis: "86400000" },
+          startTimeMillis: String(stepStart),
+          endTimeMillis: String(endMs),
+        }),
+        signal: AbortSignal.timeout(6000),
+      }
+    );
+  }
+
+  // If still not ok, try generic delta
   if (!aggRes.ok) {
     aggRes = await fetch(
       "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate",

@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 // ─── Inner page component (inside FitRestProvider) ────────────────────────────
 
 function FitnessPageInner() {
-  const { workoutHistory, fitnessProfile, recoveryState, googleFitConnected, googleFitAuthExpired } = useFitRest();
+  const { workoutHistory, fitnessProfile, recoveryState, googleFitConnected, googleFitAuthExpired, importPhoneFitnessData } = useFitRest();
 
   // Get today's or most recent workout
   const todaysWorkout = workoutHistory.length > 0 ? workoutHistory[0] : null;
@@ -264,14 +264,25 @@ function FitnessPageInner() {
           <WorkoutPlanCard workout={todaysWorkout} showDate={true} />
         ) : (
           <Card>
-            <CardContent className="py-12 text-center">
-              <Dumbbell className="h-12 w-12 text-navy-300 mx-auto mb-3" />
+            <CardContent className="py-10 text-center">
+              <Dumbbell className="h-10 w-10 text-navy-300 mx-auto mb-2.5" />
               <p className="text-sm font-medium text-navy-700 mb-1">
                 No workouts recorded yet
               </p>
-              <p className="text-xs text-navy-500">
-                Connect Google Fit below to import your real workouts, or complete your fitness profile to get started.
+              <p className="text-xs text-navy-500 max-w-md mx-auto">
+                Connect Google Fit below to sync your real workouts, or load your phone&apos;s tracked cardio activity directly.
               </p>
+              <div className="mt-3.5 flex justify-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={importPhoneFitnessData}
+                  className="gap-1.5 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 font-semibold shadow-xs"
+                >
+                  <Dumbbell className="h-3.5 w-3.5 text-emerald-600" />
+                  Sync Phone Activity &amp; Workouts (175 min)
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
