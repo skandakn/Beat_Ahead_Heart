@@ -92,8 +92,14 @@ export function LiveEcgMonitor() {
     const interval = setInterval(() => {
       if (isFrozen) return;
 
-      // Only flatline when the user explicitly clicks the "Leads-Off Fault" preset button:
-      if (preset === "leads_off") {
+      // Only flatline when connection is removed, leads off, or disconnected:
+      const isConnectionRemoved =
+        preset === "leads_off" ||
+        preset === "disconnected" ||
+        (!isConnected && preset === "arduino") ||
+        (isConnected && preset === "arduino" && heartRate === 0);
+
+      if (isConnectionRemoved) {
         synthBufferRef.current.push(512);
         if (synthBufferRef.current.length > 500) {
           synthBufferRef.current.shift();
@@ -283,9 +289,15 @@ export function LiveEcgMonitor() {
           ctx.fillStyle = isAlert ? "rgba(239, 68, 68, 0.55)" : "rgba(74, 222, 128, 0.4)";
           ctx.fillRect(currentX + eraseWidth - 2, 0, 2, height);
 
-          // Draw ECG Trace (only flatlines if Leads-Off Fault preset is actively selected)
-          if (preset === "leads_off") {
-            ctx.strokeStyle = "#EF4444";
+          // Draw ECG Trace (flatlines if connection is removed, disconnected, or leads-off)
+          const isFlatline =
+            preset === "leads_off" ||
+            preset === "disconnected" ||
+            (!isConnected && preset === "arduino") ||
+            (isConnected && preset === "arduino" && heartRate === 0);
+
+          if (isFlatline) {
+            ctx.strokeStyle = (preset === "leads_off" || leadsOff) ? "#EF4444" : "#64748B";
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(currentX - 1, midY);
@@ -605,38 +617,38 @@ export function LiveEcgMonitor() {
       {/* 4 Primary Telemetry Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Heart Rate */}
-        <Card className={cn("border-navy-100 shadow-xs transition-colors", preset === "leads_off" ? "border-red-300 bg-red-50/25" : isIschemiaDemoActive && "border-red-300 bg-red-50/20")}>
+        <Card className={cn("border-navy-100 shadow-xs transition-colors", (preset === "leads_off" || leadsOff) ? "border-red-300 bg-red-50/25" : isIschemiaDemoActive && "border-red-300 bg-red-50/20")}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-navy-400 text-xs">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-navy-600">Heart Rate</span>
                 <span className="relative flex h-2 w-2">
-                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", preset === "leads_off" ? "bg-red-400" : "bg-emerald-400")}></span>
-                  <span className={cn("relative inline-flex rounded-full h-2 w-2", preset === "leads_off" ? "bg-red-500" : "bg-emerald-500")}></span>
+                  <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", (preset === "leads_off" || leadsOff) ? "bg-red-400" : (!isConnected && preset === "disconnected") ? "bg-navy-300" : "bg-emerald-400")}></span>
+                  <span className={cn("relative inline-flex rounded-full h-2 w-2", (preset === "leads_off" || leadsOff) ? "bg-red-500" : (!isConnected && preset === "disconnected") ? "bg-navy-400" : "bg-emerald-500")}></span>
                 </span>
               </div>
               <Heart
                 className={cn(
                   "w-4 h-4",
-                  preset === "leads_off" ? "text-red-400" : "text-cardiac",
-                  heartRate > 90 || isIschemiaDemoActive ? "animate-ping" : preset === "leads_off" ? "" : "animate-pulse"
+                  (preset === "leads_off" || leadsOff) ? "text-red-400" : (!isConnected && preset === "disconnected") ? "text-navy-300" : "text-cardiac",
+                  heartRate > 90 || isIschemiaDemoActive ? "animate-ping" : (preset === "leads_off" || leadsOff || heartRate === 0) ? "" : "animate-pulse"
                 )}
                 fill="currentColor"
               />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className={cn("text-3xl font-extrabold font-mono tracking-tight", preset === "leads_off" ? "text-red-600" : "text-navy-900")}>
-                {preset === "leads_off" ? "0" : (heartRate >= 45 ? heartRate : 73)}
+              <span className={cn("text-3xl font-extrabold font-mono tracking-tight", (preset === "leads_off" || leadsOff) ? "text-red-600" : (heartRate === 0 || preset === "disconnected") ? "text-navy-400" : "text-navy-900")}>
+                {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? "0" : heartRate}
               </span>
               <span className="text-xs text-navy-400 font-medium">BPM</span>
-              <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border", preset === "leads_off" ? "bg-red-100 text-red-800 border-red-300" : "bg-emerald-100 text-emerald-800 border-emerald-200")}>
-                {preset === "leads_off" ? "FAULT" : "LIVE"}
+              <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border", (preset === "leads_off" || leadsOff) ? "bg-red-100 text-red-800 border-red-300" : (!isConnected && preset === "disconnected") ? "bg-navy-100 text-navy-700 border-navy-200" : (heartRate === 0) ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-emerald-100 text-emerald-800 border-emerald-200")}>
+                {(preset === "leads_off" || leadsOff) ? "FAULT" : (!isConnected && preset === "disconnected") ? "OFFLINE" : (heartRate === 0) ? "NO SIGNAL" : "LIVE"}
               </span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
               R-R Interval:{" "}
               <span className="font-semibold text-navy-700 font-mono">
-                {preset === "leads_off" ? "-- ms" : `${Math.round(60000 / Math.max(1, heartRate >= 45 ? heartRate : 73))} ms`}
+                {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? "-- ms" : `${Math.round(60000 / heartRate)} ms`}
               </span>
             </p>
           </CardContent>
@@ -658,8 +670,8 @@ export function LiveEcgMonitor() {
               <span
                 className={cn(
                   "text-3xl font-extrabold font-mono tracking-tight",
-                  preset === "leads_off"
-                    ? "text-gray-500"
+                  (preset === "leads_off" || preset === "disconnected" || heartRate === 0)
+                    ? "text-gray-400"
                     : (isIschemiaDemoActive || stDeviationMm <= -1.0)
                     ? "text-red-600"
                     : stDeviationMm <= -0.5
@@ -667,7 +679,7 @@ export function LiveEcgMonitor() {
                     : "text-emerald-600"
                 )}
               >
-                {preset === "leads_off"
+                {(preset === "leads_off" || preset === "disconnected" || heartRate === 0)
                   ? "0.00"
                   : stDeviationMm >= 0
                   ? `+${stDeviationMm.toFixed(2)}`
@@ -676,8 +688,10 @@ export function LiveEcgMonitor() {
               <span className="text-xs text-navy-400 font-medium">mm (mV/10)</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
-              {preset === "leads_off" ? (
+              {(preset === "leads_off" || leadsOff) ? (
                 <span className="text-red-500 font-medium">⚠ Leads-Off Fault</span>
+              ) : (!isConnected && preset === "disconnected") ? (
+                <span className="text-navy-400 font-medium">No Hardware Connected</span>
               ) : (isIschemiaDemoActive || stDeviationMm <= -1.0) ? (
                 <span className="text-red-600 font-bold">🚨 Ischemic ST Depression</span>
               ) : stDeviationMm <= -0.5 ? (
@@ -715,25 +729,29 @@ export function LiveEcgMonitor() {
               <span
                 className={cn(
                   "text-3xl font-extrabold font-mono tracking-tight",
-                  (isIschemiaDemoActive || isiScore >= 70)
+                  (preset === "leads_off" || preset === "disconnected" || heartRate === 0)
+                    ? "text-gray-400"
+                    : (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600"
                     : isiScore >= 40
                     ? "text-amber-500"
                     : "text-emerald-600"
                 )}
               >
-                {isiScore}
+                {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? 0 : isiScore}
               </span>
               <span className="text-xs text-navy-400 font-medium">/ 100</span>
               <span className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border",
-                (isIschemiaDemoActive || isiScore >= 70)
+                (preset === "leads_off" || preset === "disconnected" || heartRate === 0)
+                  ? "bg-navy-100 text-navy-600 border-navy-200"
+                  : (isIschemiaDemoActive || isiScore >= 70)
                   ? "bg-red-100 text-red-800 border-red-300"
                   : isiScore >= 40
                   ? "bg-amber-100 text-amber-800 border-amber-300"
                   : "bg-emerald-100 text-emerald-800 border-emerald-300"
               )}>
-                {(isIschemiaDemoActive || isiScore >= 70) ? "CRITICAL" : isiScore >= 40 ? "ELEVATED" : "NORMAL"}
+                {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? "STANDBY" : (isIschemiaDemoActive || isiScore >= 70) ? "CRITICAL" : isiScore >= 40 ? "ELEVATED" : "NORMAL"}
               </span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
@@ -741,14 +759,16 @@ export function LiveEcgMonitor() {
               <span
                 className={cn(
                   "font-bold",
-                  (isIschemiaDemoActive || isiScore >= 70)
+                  (preset === "leads_off" || preset === "disconnected" || heartRate === 0)
+                    ? "text-gray-400"
+                    : (isIschemiaDemoActive || isiScore >= 70)
                     ? "text-red-600"
                     : isiScore >= 40
                     ? "text-amber-600"
                     : "text-emerald-600"
                 )}
               >
-                {(isIschemiaDemoActive || isiScore >= 70) ? "Critical Ischemia" : isiScore >= 40 ? "Elevated Strain" : "Normal Sinus"}
+                {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? "No Signal" : (isIschemiaDemoActive || isiScore >= 70) ? "Critical Ischemia" : isiScore >= 40 ? "Elevated Strain" : "Normal Sinus"}
               </span>
             </p>
           </CardContent>
@@ -767,13 +787,13 @@ export function LiveEcgMonitor() {
               />
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-navy-900">{sampleRate}</span>
+              <span className="text-3xl font-extrabold text-navy-900">{isConnected ? sampleRate : 0}</span>
               <span className="text-xs text-navy-400 font-medium">Hz (9600 baud)</span>
             </div>
             <p className="text-[11px] text-navy-500 mt-1">
               Quality:{" "}
-              <span className="font-semibold text-emerald-600">
-                {preset === "leads_off" ? "0% SQI" : `${sqi}% SQI`}
+              <span className={cn("font-semibold", (preset === "leads_off" || preset === "disconnected" || !isConnected || heartRate === 0) ? "text-navy-400" : "text-emerald-600")}>
+                {(preset === "leads_off" || preset === "disconnected" || !isConnected || heartRate === 0) ? "0% SQI" : `${sqi}% SQI`}
               </span>{" "}
               <span className="text-navy-400">({portName})</span>
             </p>
@@ -899,17 +919,17 @@ export function LiveEcgMonitor() {
               </span>
             </div>
             <div>
-              R-R Mean: {preset === "leads_off" ? "-- ms" : `${Math.round(60000 / Math.max(1, heartRate >= 45 ? heartRate : 73))} ms`} &bull; HR: {preset === "leads_off" ? 0 : (heartRate >= 45 ? heartRate : 73)} BPM
+              R-R Mean: {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? "-- ms" : `${Math.round(60000 / heartRate)} ms`} &bull; HR: {(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? 0 : heartRate} BPM
             </div>
-            <div>ISI Stress: <span className={cn("font-bold", (isIschemiaDemoActive || isiScore >= 70) ? "text-red-400" : preset === "leads_off" ? "text-gray-400" : "text-emerald-400")}>{preset === "leads_off" ? 0 : isiScore}/100</span></div>
+            <div>ISI Stress: <span className={cn("font-bold", (preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? "text-gray-400" : (isIschemiaDemoActive || isiScore >= 70) ? "text-red-400" : "text-emerald-400")}>{(preset === "leads_off" || preset === "disconnected" || heartRate === 0) ? 0 : isiScore}/100</span></div>
             <div>
               Filter:{" "}
               <span className="font-bold text-emerald-300">
                 {dspFilterActive ? "0.5–40 Hz Bandpass + 50Hz Notch (Active)" : "Raw Unfiltered"}
               </span>
             </div>
-            <div>Status: <span className={cn("font-bold", preset === "leads_off" ? "text-red-400 animate-pulse" : "text-emerald-400")}>
-              {preset === "leads_off" ? "⚠ LEADS-OFF FAULT" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Telemetry Active"}
+            <div>Status: <span className={cn("font-bold", (preset === "leads_off" || leadsOff) ? "text-red-400 animate-pulse" : (!isConnected && preset === "disconnected") ? "text-navy-400" : "text-emerald-400")}>
+              {(preset === "leads_off" || leadsOff) ? "⚠ LEADS-OFF FAULT" : (!isConnected && preset === "disconnected") ? "Disconnected (0 BPM)" : isConnected ? (dspFilterActive ? "Physical Arduino Serial (DSP Stabilized)" : "Physical Arduino Serial (Raw)") : "Telemetry Active"}
             </span></div>
           </div>
         </div>

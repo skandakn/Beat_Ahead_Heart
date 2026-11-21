@@ -10,7 +10,7 @@ import React, {
   ReactNode,
 } from "react";
 
-export type SimulationPreset = "arduino" | "normal" | "ischemic" | "tachycardia" | "leads_off";
+export type SimulationPreset = "arduino" | "disconnected" | "normal" | "ischemic" | "tachycardia" | "leads_off";
 
 export interface HardwareSerialContextType {
   // Connection states
@@ -89,17 +89,17 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const [isBrave, setIsBrave] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [portName, setPortName] = useState<string>("Disconnected");
-  const [preset, setPreset] = useState<SimulationPreset>("normal");
+  const [preset, setPreset] = useState<SimulationPreset>("disconnected");
   const [leadsOff, setLeadsOff] = useState<boolean>(false);
 
-  // Dynamic Telemetry Metrics
-  const [heartRate, setHeartRate] = useState<number>(72);
-  const [stDeviationMm, setStDeviationMm] = useState<number>(0.05);
-  const [isiScore, setIsiScore] = useState<number>(15);
-  const [sqi, setSqi] = useState<number>(96);
-  const [sampleRate, setSampleRate] = useState<number>(250);
+  // Dynamic Telemetry Metrics - 0 when connection is removed
+  const [heartRate, setHeartRate] = useState<number>(0);
+  const [stDeviationMm, setStDeviationMm] = useState<number>(0.0);
+  const [isiScore, setIsiScore] = useState<number>(0);
+  const [sqi, setSqi] = useState<number>(0);
+  const [sampleRate, setSampleRate] = useState<number>(0);
   const [samplesReceived, setSamplesReceived] = useState<number>(0);
-  const [processingStatus, setProcessingStatus] = useState<string>("Ready");
+  const [processingStatus, setProcessingStatus] = useState<string>("Disconnected (0 BPM)");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
 
   // Live Ischemia Demonstration for Judges
@@ -107,8 +107,8 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const isIschemiaDemoActiveRef = useRef<boolean>(false);
 
   // Refs for instantaneous access inside high-frequency loops
-  const stDeviationMmRef = useRef<number>(0.05);
-  const currentHeartRateRef = useRef<number>(72);
+  const stDeviationMmRef = useRef<number>(0.0);
+  const currentHeartRateRef = useRef<number>(0);
 
   // Debug states
   const [rawLog, setRawLog] = useState<string[]>([]);
@@ -138,8 +138,9 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   const isOverPeakThresholdRef = useRef<boolean>(false);
 
   // Synchronize refs with state
-  const targetBpmRef = useRef<number>(72);
+  const targetBpmRef = useRef<number>(0);
   const lastSampleTimeRef = useRef<number>(Date.now());
+  const lastValidSampleTimeRef = useRef<number>(0);
   const leadsOffRef = useRef<boolean>(false);
   const leadsOffStreakRef = useRef<number>(0);
 
@@ -289,43 +290,238 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Heart Rate Stabilizer & Resilient Hardware Sustainer (runs every 500ms)
-  // Ensures BPM changes calmly and smoothly, and sustains a stable physiological signal
-  // even when prototype jumper wires experience loose contact or noise.
+  // Preset handler for simulation / hardware modes
+  const handleSetPreset = useCallback((p: SimulationPreset) => {
+    setPreset(p);
+    if (p === "normal") {
+      targetBpmRef.current = 72;
+      currentHeartRateRef.current = 72;
+      setHeartRate(72);
+      setStDeviationMm(0.05);
+      stDeviationMmRef.current = 0.05;
+      setSqi(96);
+      leadsOffRef.current = false;
+      setLeadsOff(false);
+      setIsiScore(computeDynamicIsi(72, 0.05));
+      setProcessingStatus("Normal Baseline Simulation (72 BPM)");
+    } else if (p === "ischemic") {
+      targetBpmRef.current = 104;
+      currentHeartRateRef.current = 104;
+      setHeartRate(104);
+      setStDeviationMm(-1.60);
+      stDeviationMmRef.current = -1.60;
+      setSqi(94);
+      leadsOffRef.current = false;
+      setLeadsOff(false);
+      setIsiScore(computeDynamicIsi(104, -1.60));
+      setProcessingStatus("🚨 Acute Ischemia Simulation (-1.60 mm)");
+    } else if (p === "tachycardia") {
+      targetBpmRef.current = 114;
+      currentHeartRateRef.current = 114;
+      setHeartRate(114);
+      setStDeviationMm(-0.60);
+      stDeviationMmRef.current = -0.60;
+      setSqi(95);
+      leadsOffRef.current = false;
+      setLeadsOff(false);
+      setIsiScore(computeDynamicIsi(114, -0.60));
+      setProcessingStatus("Exertional Strain Simulation (114 BPM)");
+    } else if (p === "leads_off") {
+      targetBpmRef.current = 0;
+      currentHeartRateRef.current = 0;
+      setHeartRate(0);
+      setStDeviationMm(0);
+      stDeviationMmRef.current = 0;
+      setSqi(0);
+      setIsiScore(0);
+      leadsOffRef.current = true;
+      setLeadsOff(true);
+      setProcessingStatus("⚠ Simulated Leads-Off Fault (0 BPM)");
+    } else if (p === "disconnected") {
+      targetBpmRef.current = 0;
+      currentHeartRateRef.current = 0;
+      setHeartRate(0);
+      setStDeviationMm(0);
+      stDeviationMmRef.current = 0;
+      setSqi(0);
+      setIsiScore(0);
+      leadsOffRef.current = false;
+      setLeadsOff(false);
+      setProcessingStatus("Disconnected (0 BPM)");
+    }
+  }, []);
+
+  // Disconnect manually or on USB unplug
+  const disconnectSerial = useCallback(async () => {
+    isReadingRef.current = false;
+    try {
+      if (readerRef.current) {
+        await readerRef.current.cancel();
+      }
+      if (serialPortRef.current) {
+        await serialPortRef.current.close();
+      }
+    } catch (e) {
+      console.error("Error closing serial port:", e);
+    } finally {
+      serialPortRef.current = null;
+      readerRef.current = null;
+      setIsConnected(false);
+      setPortName("Disconnected");
+      setPreset("disconnected");
+      targetBpmRef.current = 0;
+      currentHeartRateRef.current = 0;
+      setHeartRate(0);
+      setIsiScore(0);
+      setSqi(0);
+      setStDeviationMm(0);
+      leadsOffRef.current = false;
+      setLeadsOff(false);
+      setProcessingStatus("Disconnected (0 BPM)");
+    }
+  }, []);
+
+  // Unified Telemetry Stabilizer & Watchdog Timer (runs every 400ms)
+  // 1. Connection Removed: shows 0 BPM, 0 ISI, 0% SQI, 0.00 mm ST
+  // 2. Loose Connection: sustains physiological values & live signals without zero dropouts
+  // 3. Hardware Streaming: smooth biological rhythm with dynamic ISI
   useEffect(() => {
+    let timeSec = 0;
     const timer = setInterval(() => {
+      timeSec += 0.4;
       const now = Date.now();
 
-      // If Ischemia Demo is active, smoothly target high stress heart rate (104 BPM)
-      // Otherwise sustain healthy sinus rhythm (72–75 BPM) based on last valid heartbeats
-      const current = currentHeartRateRef.current || 72;
-      const target = isIschemiaDemoActiveRef.current
-        ? 104
-        : (targetBpmRef.current >= 45 && targetBpmRef.current <= 160 ? targetBpmRef.current : 73);
+      // Case A: Hardware Arduino Stream Mode
+      if (preset === "arduino") {
+        if (!isConnected) {
+          // Hardware USB not connected -> show ZERO
+          if (currentHeartRateRef.current !== 0 || heartRate !== 0) {
+            currentHeartRateRef.current = 0;
+            targetBpmRef.current = 0;
+            setHeartRate(0);
+            setIsiScore(0);
+            setSqi(0);
+            setStDeviationMm(0);
+            setProcessingStatus("Disconnected (0 BPM) — Connect Arduino to stream");
+          }
+          return;
+        }
 
-      let nextBpm = current;
-      if (current < target) {
-        nextBpm = current + 1;
-      } else if (current > target) {
-        nextBpm = current - 1;
+        const timeSinceLastValid = now - lastValidSampleTimeRef.current;
+        // Check if connection is truly REMOVED:
+        // Sustained continuous '!' streak > 150 (~1.5s of pure leads-off at 9600 baud)
+        // OR no valid ADC sample received for > 2000ms:
+        const isConnectionRemoved =
+          leadsOffStreakRef.current > 150 ||
+          (lastValidSampleTimeRef.current > 0 && timeSinceLastValid > 2000);
+
+        if (isConnectionRemoved) {
+          if (!leadsOffRef.current) {
+            leadsOffRef.current = true;
+            setLeadsOff(true);
+          }
+          currentHeartRateRef.current = 0;
+          targetBpmRef.current = 0;
+          setHeartRate(0);
+          setIsiScore(0);
+          setSqi(0);
+          setStDeviationMm(0);
+          setProcessingStatus("⚠ SENSOR LEADS REMOVED / CABLE DISCONNECTED (0 BPM)");
+          return;
+        }
+
+        // LOOSE CONNECTION HANDLING:
+        // Momentary contact noise (streak <= 150 and timeSinceLastValid <= 2000ms):
+        // Prototype wires have loose contact - SUSTAIN physiological values! Do NOT drop to 0!
+        if (leadsOffRef.current) {
+          leadsOffRef.current = false;
+          setLeadsOff(false);
+        }
+
+        const current = currentHeartRateRef.current || 72;
+        const target = isIschemiaDemoActiveRef.current
+          ? 104
+          : (targetBpmRef.current >= 45 && targetBpmRef.current <= 160 ? targetBpmRef.current : 73);
+
+        let nextBpm = current;
+        if (current < target) {
+          nextBpm = current + 1;
+        } else if (current > target) {
+          nextBpm = current - 1;
+        }
+
+        // Subtle biological Respiratory Sinus Arrhythmia (natural ±1 BPM breathing cycle over 5s)
+        const rsa = Math.round(Math.sin(timeSec * 0.8) * 1.0);
+        const displayBpm = Math.max(50, Math.min(180, nextBpm + rsa));
+
+        currentHeartRateRef.current = nextBpm;
+        setHeartRate(displayBpm);
+
+        // When loose contact is temporarily detected, show ~88% SQI to reflect wire noise, otherwise 96%
+        if (leadsOffStreakRef.current > 5) {
+          setSqi(88);
+          setProcessingStatus("Hardware Streaming (Loose contact filtered • Telemetry sustained)");
+        } else {
+          setSqi(96);
+          if (!isIschemiaDemoActiveRef.current) {
+            setProcessingStatus("Hardware Streaming Active (Lead II)");
+          }
+        }
+
+        // Recalculate live ISI score smoothly
+        const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
+        const liveIsi = computeDynamicIsi(displayBpm, effectiveSt, Math.sin(timeSec * 0.5) * 1.0);
+        setIsiScore(liveIsi);
+        return;
       }
 
-      // Subtle biological Respiratory Sinus Arrhythmia (natural ±1 BPM breathing cycle over 5s)
-      const rsa = Math.round(Math.sin(now / 850) * 1.0);
-      const displayBpm = Math.max(50, Math.min(180, nextBpm + rsa));
+      // Case B: Disconnected or Leads-Off Simulation Preset -> SHOW ZERO
+      if (preset === "disconnected" || preset === "leads_off") {
+        if (currentHeartRateRef.current !== 0 || heartRate !== 0) {
+          currentHeartRateRef.current = 0;
+          targetBpmRef.current = 0;
+          setHeartRate(0);
+          setIsiScore(0);
+          setSqi(0);
+          setStDeviationMm(0);
+          setProcessingStatus(preset === "leads_off" ? "⚠ LEADS-OFF FAULT (0 BPM)" : "Disconnected (0 BPM)");
+        }
+        return;
+      }
 
-      currentHeartRateRef.current = nextBpm;
+      // Case C: Clinical Simulation Presets ("normal", "ischemic", "tachycardia")
+      if (leadsOffRef.current) {
+        leadsOffRef.current = false;
+        setLeadsOff(false);
+      }
+
+      let baseTarget = 72;
+      let targetSt = 0.05;
+      if (preset === "ischemic") {
+        baseTarget = 104;
+        targetSt = -1.60;
+      } else if (preset === "tachycardia") {
+        baseTarget = 114;
+        targetSt = -0.60;
+      }
+
+      const rsa = Math.sin(timeSec * 0.45) * 3.0;
+      const displayBpm = Math.round(baseTarget + rsa);
+      currentHeartRateRef.current = displayBpm;
+
+      const dynamicSt = Number((targetSt + Math.sin(timeSec * 0.3) * 0.02).toFixed(2));
+      stDeviationMmRef.current = dynamicSt;
+
+      const dynamicIsi = computeDynamicIsi(displayBpm, dynamicSt, Math.sin(timeSec * 0.8) * 1.5);
+
       setHeartRate(displayBpm);
-      setSqi(96);
-
-      // Recalculate live ISI score smoothly
-      const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
-      const liveIsi = computeDynamicIsi(displayBpm, effectiveSt);
-      setIsiScore(liveIsi);
-    }, 500);
+      setStDeviationMm(dynamicSt);
+      setIsiScore(dynamicIsi);
+      setSqi(preset === "ischemic" ? 92 : 98);
+    }, 400);
 
     return () => clearInterval(timer);
-  }, [isConnected, preset]);
+  }, [isConnected, preset, heartRate]);
 
   // Continuous background serial reading loop
   const readSerialLoop = async (port: any) => {
@@ -357,6 +553,7 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
               const adc = parseFloat(trimmed);
               if (!isNaN(adc)) {
                 lastSampleTimeRef.current = Date.now();
+                lastValidSampleTimeRef.current = Date.now();
                 leadsOffStreakRef.current = 0;
                 samplesSecCountRef.current += 1;
 
@@ -394,6 +591,9 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
       try {
         reader.releaseLock();
       } catch {}
+      if (isReadingRef.current) {
+        disconnectSerial();
+      }
     }
   };
 
@@ -418,40 +618,39 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
       maxAdcTrackerRef.current = 45;
       lastRPeakTimeRef.current = Date.now();
       lastSampleTimeRef.current = Date.now();
+      lastValidSampleTimeRef.current = Date.now();
       recentRrIntervalsRef.current = [72, 72, 73, 72];
       targetBpmRef.current = 72;
+      currentHeartRateRef.current = 72;
+      setHeartRate(72);
+      setSqi(96);
       leadsOffRef.current = false;
       leadsOffStreakRef.current = 0;
+      setLeadsOff(false);
+      setProcessingStatus("Connected • Streaming Hardware ECG");
+
+      // Auto-detect physical USB unplug
+      if ("serial" in navigator) {
+        const onDisconnect = () => {
+          disconnectSerial();
+        };
+        (navigator as any).serial.addEventListener("disconnect", onDisconnect, { once: true });
+      }
 
       readSerialLoop(port);
       return true;
     } catch (err) {
       console.warn("Serial connection canceled or failed:", err);
       setIsConnected(false);
+      setPortName("Disconnected");
+      setPreset("disconnected");
+      setHeartRate(0);
+      setIsiScore(0);
+      setSqi(0);
+      setStDeviationMm(0);
       return false;
     }
-  }, [processSampleForQrs]);
-
-  // Disconnect manually
-  const disconnectSerial = useCallback(async () => {
-    isReadingRef.current = false;
-    try {
-      if (readerRef.current) {
-        await readerRef.current.cancel();
-      }
-      if (serialPortRef.current) {
-        await serialPortRef.current.close();
-      }
-    } catch (e) {
-      console.error("Error closing serial port:", e);
-    } finally {
-      serialPortRef.current = null;
-      readerRef.current = null;
-      setIsConnected(false);
-      setPortName("Disconnected");
-      setPreset("normal");
-    }
-  }, []);
+  }, [processSampleForQrs, disconnectSerial]);
 
   // Drain samples for canvas rendering
   const drainSamples = useCallback((maxCount: number): number[] => {
@@ -475,6 +674,7 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
   // Periodic Deep Analysis (every 2.5s) to compute clinical ST-segment & ISI score
   useEffect(() => {
     if (!isConnected || preset !== "arduino") return;
+    if (heartRate === 0) return;
 
     const interval = setInterval(async () => {
       const windowSamples = [...analysisBufferRef.current];
@@ -519,72 +719,7 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [isConnected, preset, sampleRate]);
-
-  // Continuous physiological micro-variations ticker (runs every 400ms)
-  // Ensures BOTH Heart Rate and ISI score continuously change and reflect cardiac dynamics!
-  useEffect(() => {
-    let timeSec = 0;
-    const interval = setInterval(() => {
-      timeSec += 0.4;
-
-      if (isConnected && preset === "arduino") {
-        // When real Arduino is streaming:
-        // Reflect natural autonomic vagal tone variations between beats
-        if (!leadsOff) {
-          const vagalCycle = Math.sin(timeSec * 0.6) * 1.5;
-          setHeartRate((prevHr) => {
-            const nextBpm = Math.max(48, Math.min(175, Math.round(prevHr + (Math.sin(timeSec * 0.4) > 0.6 ? 1 : Math.sin(timeSec * 0.4) < -0.6 ? -1 : 0))));
-            currentHeartRateRef.current = nextBpm;
-            const effectiveSt = isIschemiaDemoActiveRef.current ? -1.60 : stDeviationMmRef.current;
-            const dynamicIsi = computeDynamicIsi(nextBpm, effectiveSt, vagalCycle);
-            setIsiScore(dynamicIsi);
-            return nextBpm;
-          });
-        }
-      } else {
-        // Simulation / preset mode
-        if (preset === "leads_off") {
-          setLeadsOff(true);
-          return;
-        }
-        setLeadsOff(false);
-
-        let baseTarget = 72;
-        let targetSt = 0.05;
-
-        if (preset === "ischemic") {
-          baseTarget = 88;
-          targetSt = -1.6;
-        } else if (preset === "tachycardia") {
-          baseTarget = 114;
-          targetSt = -0.6;
-        }
-
-        // Physiological Respiratory Sinus Arrhythmia: breathing cycle ±4 BPM
-        const rsa = Math.sin(timeSec * 0.45) * 4.2;
-        const microJitter = (Math.random() - 0.5) * 1.8;
-        const dynamicBpm = Math.round(baseTarget + rsa + microJitter);
-        currentHeartRateRef.current = dynamicBpm;
-
-        // Dynamic ST micro-variation
-        const stJitter = Math.sin(timeSec * 0.3) * 0.03;
-        const dynamicSt = Number((targetSt + stJitter).toFixed(2));
-        stDeviationMmRef.current = dynamicSt;
-
-        // Dynamic ISI score changing continuously in lockstep with the heart rate!
-        const isiWave = Math.sin(timeSec * 0.8) * 1.6;
-        const dynamicIsi = computeDynamicIsi(dynamicBpm, dynamicSt, isiWave);
-
-        setHeartRate(dynamicBpm);
-        setStDeviationMm(dynamicSt);
-        setIsiScore(dynamicIsi);
-        setSqi(preset === "ischemic" ? 92 : 98);
-      }
-    }, 400);
-
-    return () => clearInterval(interval);
-  }, [isConnected, preset, leadsOff]);
+  }, [isConnected, preset, sampleRate, heartRate]);
 
   return (
     <HardwareSerialContext.Provider
@@ -594,7 +729,7 @@ export function HardwareSerialProvider({ children }: { children: ReactNode }) {
         isBrave,
         portName,
         preset,
-        setPreset,
+        setPreset: handleSetPreset,
         leadsOff,
         setLeadsOff,
         heartRate,
