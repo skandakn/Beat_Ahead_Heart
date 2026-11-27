@@ -309,7 +309,7 @@ export function AppHeader() {
     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-navy-100">
       <div className="flex items-center justify-between px-4 lg:px-8 py-4">
         <div className="lg:hidden flex items-center gap-2">
-          <Heart className="w-5 h-5 text-cardiac" fill="#DC2626" />
+          <Heart className="w-5 h-5 text-cardiac" fill="currentColor" />
           <span className="font-bold text-navy-900">BeatAhead</span>
         </div>
         <h2 className="hidden lg:block text-xl font-semibold text-navy-900">

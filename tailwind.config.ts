@@ -25,7 +25,7 @@ const config: Config = {
           950: "#030712",
         },
         cardiac: {
-          DEFAULT: "#DC2626",
+          DEFAULT: "#FF4D4F",
           light: "#FEE2E2",
           muted: "#F87171",
         },

@@ -6,7 +6,7 @@ export default function Loading() {
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
       <div className="relative mb-6">
         <div className="w-16 h-16 rounded-2xl bg-cardiac flex items-center justify-center shadow-xl">
-          <Heart className="w-8 h-8 text-cardiac animate-pulse" fill="#DC2626" />
+          <Heart className="w-8 h-8 text-cardiac animate-pulse" fill="currentColor" />
         </div>
         <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cardiac opacity-75"></span>
