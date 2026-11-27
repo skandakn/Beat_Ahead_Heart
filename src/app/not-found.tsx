@@ -6,8 +6,8 @@ export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-navy-50">
       <div className="text-center max-w-md">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-cardiac mb-6 shadow-xs">
-          <Heart className="w-6 h-6 text-white" fill="white" />
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-red-500/20 via-red-500/10 to-rose-500/5 backdrop-blur-xl border border-red-400/30 mb-6 shadow-sm shadow-red-500/15">
+          <Heart className="w-6 h-6 text-cardiac" fill="currentColor" />
         </div>
         <h1 className="text-4xl font-bold text-navy-900">404</h1>
         <p className="mt-3 text-navy-600">This page could not be found.</p>

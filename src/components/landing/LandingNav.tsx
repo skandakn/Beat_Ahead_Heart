@@ -24,8 +24,8 @@ export function LandingNav() {
     <nav className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur-md border-b border-navy-100">
       <div className="max-w-7xl mx-auto px-4 lg:px-8 flex items-center justify-between h-16">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-cardiac flex items-center justify-center shadow-xs">
-            <Heart className="w-4 h-4 text-white" fill="white" />
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-red-500/20 via-red-500/10 to-rose-500/5 backdrop-blur-md border border-red-400/30 flex items-center justify-center shadow-xs shadow-red-500/15">
+            <Heart className="w-4 h-4 text-cardiac" fill="currentColor" />
           </div>
           <span className="font-bold text-navy-900">BeatAhead</span>
         </Link>

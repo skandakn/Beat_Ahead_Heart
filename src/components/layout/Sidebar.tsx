@@ -71,10 +71,10 @@ export function Sidebar() {
   if (isLanding || isAuthPage || isOnboarding) return null;
 
   return (
-    <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:z-40 border-r border-navy-100 bg-white">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-navy-100">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cardiac shadow-xs">
-          <Heart className="w-5 h-5 text-white" fill="white" />
+    <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:z-40 border-r border-navy-100/80 bg-white/80 backdrop-blur-xl shadow-xs">
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-navy-100/80">
+        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-red-500/20 via-red-500/10 to-rose-500/5 backdrop-blur-md border border-red-400/30 shadow-xs shadow-red-500/15">
+          <Heart className="w-5 h-5 text-cardiac" fill="currentColor" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-navy-900">BeatAhead</h1>
@@ -102,14 +102,14 @@ export function Sidebar() {
               href={item.href}
               data-tour-id={tourId}
               className={cn(
-                "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-cardiac text-white shadow-xs"
-                  : "text-navy-600 hover:bg-navy-50 hover:text-navy-900"
+                  ? "bg-gradient-to-r from-red-500/15 via-red-500/10 to-red-500/5 backdrop-blur-md border border-red-400/30 text-cardiac font-semibold shadow-xs shadow-red-500/10"
+                  : "text-navy-600 hover:bg-navy-50/80 hover:text-navy-900"
               )}
             >
               <div className="flex items-center gap-3">
-                <Icon className="w-4 h-4" />
+                <Icon className={cn("w-4 h-4", isActive ? "text-cardiac" : "")} />
                 {item.label}
               </div>
             </Link>
@@ -128,13 +128,13 @@ export function Sidebar() {
                       key={wellnessItem.href}
                       href={wellnessItem.href}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                         wellnessActive
-                          ? "bg-cardiac text-white shadow-xs"
-                          : "text-navy-600 hover:bg-navy-50 hover:text-navy-900"
+                          ? "bg-gradient-to-r from-red-500/15 via-red-500/10 to-red-500/5 backdrop-blur-md border border-red-400/30 text-cardiac font-semibold shadow-xs shadow-red-500/10"
+                          : "text-navy-600 hover:bg-navy-50/80 hover:text-navy-900"
                       )}
                     >
-                      <WellnessIcon className="w-4 h-4" />
+                      <WellnessIcon className={cn("w-4 h-4", wellnessActive ? "text-cardiac" : "")} />
                       {wellnessItem.label}
                     </Link>
                   );
@@ -253,8 +253,10 @@ export function MobileNav() {
                     href={item.href}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
-                      isActive ? "bg-cardiac text-white shadow-xs" : "text-navy-600 hover:bg-navy-50"
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-gradient-to-r from-red-500/15 via-red-500/10 to-red-500/5 backdrop-blur-md border border-red-400/30 text-cardiac font-semibold shadow-xs shadow-red-500/10"
+                        : "text-navy-600 hover:bg-navy-50/80"
                     )}
                   >
                     <div className="flex items-center gap-3">

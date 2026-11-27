@@ -23,8 +23,8 @@ export default function AboutPage() {
       <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-10">
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-cardiac flex items-center justify-center shadow-xs">
-              <Heart className="w-5 h-5 text-white" fill="white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 via-red-500/10 to-rose-500/5 backdrop-blur-md border border-red-400/30 flex items-center justify-center shadow-xs shadow-red-500/15">
+              <Heart className="w-5 h-5 text-cardiac" fill="currentColor" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-navy-900">About BeatAhead</h1>
