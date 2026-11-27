@@ -73,7 +73,7 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:z-40 border-r border-navy-100 bg-white">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-navy-100">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-navy-900">
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cardiac shadow-xs">
           <Heart className="w-5 h-5 text-white" fill="white" />
         </div>
         <div>
@@ -104,7 +104,7 @@ export function Sidebar() {
               className={cn(
                 "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-navy-900 text-white"
+                  ? "bg-cardiac text-white shadow-xs"
                   : "text-navy-600 hover:bg-navy-50 hover:text-navy-900"
               )}
             >
@@ -130,7 +130,7 @@ export function Sidebar() {
                       className={cn(
                         "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                         wellnessActive
-                          ? "bg-navy-900 text-white"
+                          ? "bg-cardiac text-white shadow-xs"
                           : "text-navy-600 hover:bg-navy-50 hover:text-navy-900"
                       )}
                     >
@@ -254,7 +254,7 @@ export function MobileNav() {
                     onClick={() => setOpen(false)}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
-                      isActive ? "bg-navy-900 text-white" : "text-navy-600 hover:bg-navy-50"
+                      isActive ? "bg-cardiac text-white shadow-xs" : "text-navy-600 hover:bg-navy-50"
                     )}
                   >
                     <div className="flex items-center gap-3">

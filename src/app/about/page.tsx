@@ -23,7 +23,7 @@ export default function AboutPage() {
       <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-10">
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-navy-900 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-cardiac flex items-center justify-center shadow-xs">
               <Heart className="w-5 h-5 text-white" fill="white" />
             </div>
             <div>

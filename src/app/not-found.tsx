@@ -6,7 +6,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-navy-50">
       <div className="text-center max-w-md">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-navy-900 mb-6">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-cardiac mb-6 shadow-xs">
           <Heart className="w-6 h-6 text-white" fill="white" />
         </div>
         <h1 className="text-4xl font-bold text-navy-900">404</h1>

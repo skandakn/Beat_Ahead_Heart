@@ -86,7 +86,7 @@ export default function DashboardPage() {
           {/* BeatAhead Branding */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-navy-900">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-cardiac shadow-xs">
                 <Heart className="w-4 h-4 text-white" fill="white" />
               </div>
               <span className="text-lg font-bold text-navy-900">BeatAhead</span>
