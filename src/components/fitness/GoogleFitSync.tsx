@@ -175,7 +175,6 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
     applyVitalsToHealthRecord,
   } = useFitRest();
 
-  const [justSynced, setJustSynced] = useState(false);
   const [appliedVitals, setAppliedVitals] = useState(false);
 
   const handleApplyVitals = () => {
@@ -185,11 +184,7 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
   };
 
   const handleSync = async () => {
-    const ok = await syncGoogleFit();
-    if (ok) {
-      setJustSynced(true);
-      setTimeout(() => setJustSynced(false), 3000);
-    }
+    await syncGoogleFit();
   };
 
   const copy = VARIANT_COPY[variant];
@@ -808,22 +803,18 @@ export function GoogleFitSync({ variant = "fitness" }: { variant?: GoogleFitVari
                     variant="default"
                     onClick={() => void handleSync()}
                     disabled={googleFitSyncing}
+                    title="Click to re-sync latest Google Fit data"
                     className="gap-1.5 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm"
                   >
                     {googleFitSyncing ? (
                       <>
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        Syncing Google Fit…
-                      </>
-                    ) : justSynced ? (
-                      <>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        Synced Just Now
+                        Syncing…
                       </>
                     ) : (
                       <>
-                        <RefreshCw className="h-3.5 w-3.5 text-white" />
-                        Sync Google Fit Now
+                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        Synced
                       </>
                     )}
                   </Button>
